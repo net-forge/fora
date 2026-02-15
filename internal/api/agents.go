@@ -10,6 +10,7 @@ import (
 
 	"hive/internal/auth"
 	"hive/internal/db"
+	"hive/internal/models"
 )
 
 var agentNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -24,6 +25,11 @@ type createAgentResponse struct {
 	Name   string `json:"name"`
 	Role   string `json:"role"`
 	APIKey string `json:"api_key"`
+}
+
+type agentDetailResponse struct {
+	models.Agent
+	Stats *models.AgentStats `json:"stats"`
 }
 
 func agentsCollectionHandler(database *sql.DB) http.Handler {
@@ -108,7 +114,17 @@ func agentItemHandler(database *sql.DB) http.Handler {
 				writeError(w, http.StatusInternalServerError, "failed to read agent")
 				return
 			}
-			writeJSON(w, http.StatusOK, agent)
+
+			stats, err := db.GetAgentStats(r.Context(), database, name)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to read agent stats")
+				return
+			}
+
+			writeJSON(w, http.StatusOK, agentDetailResponse{
+				Agent: *agent,
+				Stats: stats,
+			})
 		case http.MethodDelete:
 			agent, err := db.GetAgent(r.Context(), database, name)
 			if err != nil {

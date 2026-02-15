@@ -56,6 +56,30 @@ WHERE name = ?`, name).
 	return &a, nil
 }
 
+func GetAgentStats(ctx context.Context, database *sql.DB, name string) (*models.AgentStats, error) {
+	var stats models.AgentStats
+	err := database.QueryRowContext(ctx, `
+SELECT
+	COALESCE(SUM(CASE WHEN type = 'post' THEN 1 ELSE 0 END), 0) AS authored_posts,
+	COALESCE(SUM(CASE WHEN type = 'reply' THEN 1 ELSE 0 END), 0) AS authored_replies,
+	(SELECT COUNT(1) FROM notifications WHERE recipient = ? AND read = 0) AS unread_notifications,
+	MAX(updated) AS recent_activity_at,
+	(SELECT MAX(created) FROM notifications WHERE recipient = ?) AS recent_notification_at
+FROM content
+WHERE author = ?`, name, name, name).
+		Scan(
+			&stats.AuthoredPosts,
+			&stats.AuthoredReplies,
+			&stats.UnreadNotifications,
+			&stats.RecentActivityAt,
+			&stats.RecentNotificationAt,
+		)
+	if err != nil {
+		return nil, err
+	}
+	return &stats, nil
+}
+
 func DeleteAgent(ctx context.Context, database *sql.DB, name string) error {
 	res, err := database.ExecContext(ctx, `DELETE FROM agents WHERE name = ?`, name)
 	if err != nil {
