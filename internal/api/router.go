@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"hive/internal/db"
 	"hive/internal/ratelimit"
 )
 
@@ -38,10 +39,28 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 }
 
 func statusHandler(database *sql.DB, version string) http.HandlerFunc {
+	startedAt := time.Now().UTC()
+
+	type statusHealth struct {
+		Database string `json:"database"`
+	}
+
+	type statusServerStats struct {
+		UptimeSeconds int64  `json:"uptime_seconds"`
+		CurrentTime   string `json:"current_time"`
+	}
+
+	type statusStats struct {
+		Forum  db.ForumStats     `json:"forum"`
+		Server statusServerStats `json:"server"`
+	}
+
 	type statusResponse struct {
 		Status    string `json:"status"`
 		Version   string `json:"version"`
 		Timestamp string `json:"timestamp"`
+		Health    statusHealth `json:"health"`
+		Stats     statusStats  `json:"stats"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -55,10 +74,27 @@ func statusHandler(database *sql.DB, version string) http.HandlerFunc {
 			return
 		}
 
+		forumStats, err := db.GetForumStats(r.Context(), database)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load stats")
+			return
+		}
+
+		now := time.Now().UTC()
 		writeJSON(w, http.StatusOK, statusResponse{
 			Status:    "ok",
 			Version:   version,
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Timestamp: now.Format(time.RFC3339),
+			Health: statusHealth{
+				Database: "ok",
+			},
+			Stats: statusStats{
+				Forum: forumStats,
+				Server: statusServerStats{
+					UptimeSeconds: int64(now.Sub(startedAt).Seconds()),
+					CurrentTime:   now.Format(time.RFC3339),
+				},
+			},
 		})
 	}
 }
