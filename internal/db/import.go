@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	"hive/internal/auth"
 	"hive/internal/models"
 )
@@ -137,6 +138,12 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 	}
 	defer tx.Rollback()
 
+	type markdownRecord struct {
+		content models.Content
+		tags    []string
+	}
+	records := make([]markdownRecord, 0, len(files))
+
 	for _, f := range files {
 		content, err := os.ReadFile(f)
 		if err != nil {
@@ -146,13 +153,13 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", f, err)
 		}
-		id, _ := meta["id"].(string)
-		typ, _ := meta["type"].(string)
-		author, _ := meta["author"].(string)
-		created, _ := meta["created"].(string)
-		updated, _ := meta["updated"].(string)
-		threadID, _ := meta["thread_id"].(string)
-		status, _ := meta["status"].(string)
+		id := toString(meta["id"])
+		typ := toString(meta["type"])
+		author := toString(meta["author"])
+		created := toString(meta["created"])
+		updated := toString(meta["updated"])
+		threadID := toString(meta["thread_id"])
+		status := toString(meta["status"])
 		title := toStringPtr(meta["title"])
 		parentID := toStringPtr(meta["parent_id"])
 		if id == "" || typ == "" || author == "" || created == "" || updated == "" || threadID == "" {
@@ -161,31 +168,85 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 		if status == "" {
 			status = "open"
 		}
-		if err := ensureAgentForImportTx(ctx, tx, author); err != nil {
+		records = append(records, markdownRecord{
+			content: models.Content{
+				ID:       id,
+				Type:     typ,
+				Author:   author,
+				Title:    title,
+				Body:     strings.TrimSpace(body),
+				Created:  created,
+				Updated:  updated,
+				ThreadID: threadID,
+				ParentID: parentID,
+				Status:   status,
+			},
+			tags: parseTags(meta["tags"]),
+		})
+	}
+
+	insertRecord := func(record markdownRecord) error {
+		if err := ensureAgentForImportTx(ctx, tx, record.content.Author); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
 INSERT OR REPLACE INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, typ, author, title, strings.TrimSpace(body), created, updated, threadID, parentID, status); err != nil {
+			record.content.ID, record.content.Type, record.content.Author, record.content.Title,
+			record.content.Body, record.content.Created, record.content.Updated, record.content.ThreadID,
+			record.content.ParentID, record.content.Status); err != nil {
 			return err
 		}
 
-		if rawTags, ok := meta["tags"]; ok {
-			switch tags := rawTags.(type) {
-			case []any:
-				for _, t := range tags {
-					tag, _ := t.(string)
-					tag = strings.TrimSpace(tag)
-					if tag == "" {
-						continue
-					}
-					if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO tags (content_id, tag) VALUES (?, ?)`, id, tag); err != nil {
-						return err
-					}
-				}
+		for _, tag := range record.tags {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO tags (content_id, tag) VALUES (?, ?)`, record.content.ID, tag); err != nil {
+				return err
 			}
 		}
+		return nil
+	}
+
+	pendingReplies := make([]markdownRecord, 0)
+	for _, record := range records {
+		if record.content.Type == "post" {
+			if err := insertRecord(record); err != nil {
+				return err
+			}
+			continue
+		}
+		pendingReplies = append(pendingReplies, record)
+	}
+
+	for len(pendingReplies) > 0 {
+		nextPending := make([]markdownRecord, 0, len(pendingReplies))
+		progressed := false
+		for _, record := range pendingReplies {
+			parentID := ""
+			if record.content.ParentID != nil {
+				parentID = strings.TrimSpace(*record.content.ParentID)
+			}
+			if parentID != "" {
+				var parentExists int
+				if err := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM content WHERE id = ?`, parentID).Scan(&parentExists); err != nil {
+					return err
+				}
+				if parentExists == 0 {
+					nextPending = append(nextPending, record)
+					continue
+				}
+			}
+			if err := insertRecord(record); err != nil {
+				return err
+			}
+			progressed = true
+		}
+		if len(nextPending) == 0 {
+			break
+		}
+		if !progressed {
+			return fmt.Errorf("could not resolve parent references for %d markdown replies", len(nextPending))
+		}
+		pendingReplies = nextPending
 	}
 	return tx.Commit()
 }
@@ -210,22 +271,71 @@ VALUES (?, ?, 'agent', ?, ?)`,
 }
 
 func parseFrontmatter(in string) (map[string]any, string, error) {
-	parts := strings.SplitN(in, "---", 3)
-	if len(parts) < 3 {
+	normalized := strings.ReplaceAll(strings.TrimPrefix(in, "\ufeff"), "\r\n", "\n")
+	if !strings.HasPrefix(normalized, "---\n") {
 		return nil, "", errors.New("missing frontmatter")
 	}
+	rest := normalized[len("---\n"):]
+	sepIndex := strings.Index(rest, "\n---\n")
+	sepLen := len("\n---\n")
+	if sepIndex == -1 {
+		sepIndex = strings.Index(rest, "\n---")
+		sepLen = len("\n---")
+	}
+	if sepIndex == -1 {
+		return nil, "", errors.New("missing closing frontmatter delimiter")
+	}
+	frontmatterBlock := strings.TrimSpace(rest[:sepIndex])
 	var meta map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(parts[1])), &meta); err != nil {
+	if err := yaml.Unmarshal([]byte(frontmatterBlock), &meta); err != nil {
 		return nil, "", err
 	}
-	body := strings.TrimSpace(parts[2])
+	body := strings.TrimSpace(rest[sepIndex+sepLen:])
 	return meta, body, nil
 }
 
 func toStringPtr(v any) *string {
-	s, ok := v.(string)
-	if !ok || strings.TrimSpace(s) == "" {
+	s := toString(v)
+	if s == "" {
 		return nil
 	}
 	return &s
+}
+
+func toString(v any) string {
+	switch raw := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(raw)
+	case time.Time:
+		return raw.UTC().Format(time.RFC3339)
+	default:
+		return strings.TrimSpace(fmt.Sprint(raw))
+	}
+}
+
+func parseTags(raw any) []string {
+	switch tags := raw.(type) {
+	case []any:
+		out := make([]string, 0, len(tags))
+		for _, t := range tags {
+			tag := toString(t)
+			if tag != "" {
+				out = append(out, tag)
+			}
+		}
+		return out
+	case []string:
+		out := make([]string, 0, len(tags))
+		for _, t := range tags {
+			tag := strings.TrimSpace(t)
+			if tag != "" {
+				out = append(out, tag)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }

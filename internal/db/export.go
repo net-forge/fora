@@ -3,13 +3,13 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	"hive/internal/models"
 )
 
@@ -79,6 +79,52 @@ func ExportMarkdown(ctx context.Context, database *sql.DB, opts ExportOptions) (
 		if err != nil {
 			return nil, err
 		}
+		byID := make(map[string]models.Content, len(items))
+		replyPaths := make(map[string]string, len(items))
+		for _, item := range items {
+			byID[item.ID] = item
+		}
+
+		var replyPath func(replyID string, seen map[string]bool) string
+		replyPath = func(replyID string, seen map[string]bool) string {
+			if path, ok := replyPaths[replyID]; ok {
+				return path
+			}
+			item, ok := byID[replyID]
+			if !ok {
+				return filepath.ToSlash(filepath.Join("threads", threadID, "replies", replyID, "reply.md"))
+			}
+			if seen[replyID] {
+				return filepath.ToSlash(filepath.Join("threads", threadID, "replies", replyID, "reply.md"))
+			}
+			parentID := ""
+			if item.ParentID != nil {
+				parentID = strings.TrimSpace(*item.ParentID)
+			}
+			if parentID == "" || parentID == threadID {
+				path := filepath.ToSlash(filepath.Join("threads", threadID, "replies", replyID, "reply.md"))
+				replyPaths[replyID] = path
+				return path
+			}
+
+			parent, ok := byID[parentID]
+			if !ok || parent.Type != "reply" {
+				path := filepath.ToSlash(filepath.Join("threads", threadID, "replies", replyID, "reply.md"))
+				replyPaths[replyID] = path
+				return path
+			}
+
+			nextSeen := make(map[string]bool, len(seen)+1)
+			for id, v := range seen {
+				nextSeen[id] = v
+			}
+			nextSeen[replyID] = true
+			parentPath := replyPath(parentID, nextSeen)
+			path := filepath.ToSlash(filepath.Join(filepath.Dir(parentPath), "replies", replyID, "reply.md"))
+			replyPaths[replyID] = path
+			return path
+		}
+
 		for _, item := range items {
 			if item.Type == "post" {
 				files = append(files, MarkdownFile{
@@ -88,7 +134,7 @@ func ExportMarkdown(ctx context.Context, database *sql.DB, opts ExportOptions) (
 				continue
 			}
 			files = append(files, MarkdownFile{
-				Path:    filepath.ToSlash(filepath.Join("threads", threadID, "replies", item.ID+".md")),
+				Path:    replyPath(item.ID, map[string]bool{}),
 				Content: renderFrontmatter(item) + "\n" + item.Body + "\n",
 			})
 		}
@@ -226,24 +272,29 @@ func exportThreadIDs(ctx context.Context, database *sql.DB, opts ExportOptions) 
 }
 
 func renderFrontmatter(c models.Content) string {
-	meta := map[string]any{
-		"id":        c.ID,
-		"type":      c.Type,
-		"author":    c.Author,
-		"created":   c.Created,
-		"updated":   c.Updated,
-		"thread_id": c.ThreadID,
-		"status":    c.Status,
+	meta := struct {
+		ID       string   `yaml:"id"`
+		Type     string   `yaml:"type"`
+		Author   string   `yaml:"author"`
+		Title    *string  `yaml:"title,omitempty"`
+		Created  string   `yaml:"created"`
+		Updated  string   `yaml:"updated"`
+		ThreadID string   `yaml:"thread_id"`
+		ParentID *string  `yaml:"parent_id,omitempty"`
+		Status   string   `yaml:"status"`
+		Tags     []string `yaml:"tags,omitempty"`
+	}{
+		ID:       c.ID,
+		Type:     c.Type,
+		Author:   c.Author,
+		Title:    c.Title,
+		Created:  c.Created,
+		Updated:  c.Updated,
+		ThreadID: c.ThreadID,
+		ParentID: c.ParentID,
+		Status:   c.Status,
+		Tags:     c.Tags,
 	}
-	if c.Title != nil {
-		meta["title"] = *c.Title
-	}
-	if c.ParentID != nil {
-		meta["parent_id"] = *c.ParentID
-	}
-	if len(c.Tags) > 0 {
-		meta["tags"] = c.Tags
-	}
-	b, _ := json.MarshalIndent(meta, "", "  ")
-	return fmt.Sprintf("---\n%s\n---", string(b))
+	b, _ := yaml.Marshal(meta)
+	return fmt.Sprintf("---\n%s---", string(b))
 }
