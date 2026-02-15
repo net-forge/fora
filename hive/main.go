@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,6 +30,8 @@ func run(args []string) error {
 		return usage()
 	}
 	switch args[0] {
+	case "install":
+		return cmdInstall(args[1:])
 	case "connect":
 		return cmdConnect(args[1:])
 	case "disconnect":
@@ -56,6 +59,77 @@ func run(args []string) error {
 	default:
 		return usage()
 	}
+}
+
+func cmdInstall(args []string) error {
+	fs := flag.NewFlagSet("install", flag.ContinueOnError)
+	image := fs.String("image", "ghcr.io/koganei/hive-server:latest", "Server image")
+	container := fs.String("container", "hive-server", "Docker container name")
+	port := fs.String("port", "8080", "Host port")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: hive install [--image ref] [--container name] [--port n]")
+	}
+
+	if _, err := exec.LookPath("docker"); err != nil {
+		return errors.New("docker is required but was not found in PATH")
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dataDir := filepath.Join(home, ".hive", "data")
+	keysDir := filepath.Join(home, ".hive", "keys")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return fmt.Errorf("create data dir: %w", err)
+	}
+	if err := os.MkdirAll(keysDir, 0o755); err != nil {
+		return fmt.Errorf("create keys dir: %w", err)
+	}
+
+	existsCmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
+	out, err := existsCmd.Output()
+	if err != nil {
+		return fmt.Errorf("check docker containers: %w", err)
+	}
+	for _, name := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(name) == *container {
+			return fmt.Errorf("container %q already exists (remove it or use --container)", *container)
+		}
+	}
+
+	pullCmd := exec.Command("docker", "pull", strings.TrimSpace(*image))
+	pullCmd.Stdout = os.Stdout
+	pullCmd.Stderr = os.Stderr
+	if err := pullCmd.Run(); err != nil {
+		return fmt.Errorf("docker pull failed: %w", err)
+	}
+
+	runArgs := []string{
+		"run", "-d",
+		"--name", strings.TrimSpace(*container),
+		"-p", strings.TrimSpace(*port) + ":8080",
+		"-v", dataDir + ":/data",
+		"-v", keysDir + ":/keys",
+		strings.TrimSpace(*image),
+		"--port", "8080",
+		"--db", "/data/hive.db",
+		"--admin-key-out", "/keys/admin.key",
+	}
+	runCmd := exec.Command("docker", runArgs...)
+	runOut, err := runCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker run failed: %w: %s", err, strings.TrimSpace(string(runOut)))
+	}
+	fmt.Printf("started container %s (%s)\n", strings.TrimSpace(*container), strings.TrimSpace(string(runOut)))
+
+	keyPath := filepath.Join(keysDir, "admin.key")
+	fmt.Printf("admin key path: %s\n", keyPath)
+	fmt.Printf("connect with: hive connect http://localhost:%s --api-key \"$(cat %s)\"\n", strings.TrimSpace(*port), keyPath)
+	return nil
 }
 
 func cmdConnect(args []string) error {
@@ -1066,6 +1140,7 @@ func printJSON(v any) error {
 
 func usage() error {
 	return errors.New(`usage:
+  hive install [--image ref] [--container name] [--port n]
   hive connect <url> --api-key <key>
   hive disconnect
   hive status

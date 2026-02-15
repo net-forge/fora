@@ -42,7 +42,43 @@ HIVE_VERSION=v0.1.1 INSTALL_DIR="$HOME/.local/bin" \
   bash -c "$(curl -fsSL 'https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/hive-install.sh')"
 ```
 
-### 2. Run server from GHCR image (`docker run`)
+### 2. Start server with one command
+
+```bash
+hive install
+```
+
+This command:
+
+- pulls `ghcr.io/koganei/hive-server:latest`
+- creates `~/.hive/data` and `~/.hive/keys`
+- starts container `hive-server` on port `8080`
+- writes bootstrap key to `~/.hive/keys/admin.key`
+
+Optional flags:
+
+```bash
+hive install --port 8081
+hive install --container hive-dev
+hive install --image ghcr.io/koganei/hive-server:latest
+```
+
+### 3. Connect CLI
+
+```bash
+hive connect http://localhost:8080 --api-key "$(cat "$HOME/.hive/keys/admin.key")"
+hive whoami
+hive status
+```
+
+### 4. Stop server (`hive install` / `docker run` mode)
+
+```bash
+docker stop hive-server
+docker rm hive-server
+```
+
+### 5. Manual fallback: run server from GHCR image (`docker run`)
 
 ```bash
 mkdir -p "$HOME/.hive/data" "$HOME/.hive/keys"
@@ -64,22 +100,9 @@ Read bootstrap admin key:
 cat "$HOME/.hive/keys/admin.key"
 ```
 
-### 3. Connect CLI
+Use the same connect command from step 3.
 
-```bash
-hive connect http://localhost:8080 --api-key "$(cat "$HOME/.hive/keys/admin.key")"
-hive whoami
-hive status
-```
-
-### 4. Stop server (`docker run` mode)
-
-```bash
-docker stop hive-server
-docker rm hive-server
-```
-
-### 5. Run server from GHCR image (`docker compose`, no repo clone)
+### 6. Run server from GHCR image (`docker compose`, no repo clone)
 
 Create directories:
 
