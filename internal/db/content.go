@@ -39,6 +39,12 @@ type ListPostsParams struct {
 	Order   string
 }
 
+type ListActivityParams struct {
+	Limit  int
+	Offset int
+	Author string
+}
+
 func CreatePost(ctx context.Context, database *sql.DB, author string, title *string, body string, tags []string, mentions []string, channelID *string) (*models.Content, error) {
 	if strings.TrimSpace(body) == "" {
 		return nil, errors.New("body is required")
@@ -284,6 +290,49 @@ LIMIT ? OFFSET ?`, parentID, limit, offset)
 			return nil, err
 		}
 		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func ListActivity(ctx context.Context, database *sql.DB, params ListActivityParams) ([]models.ActivityEvent, error) {
+	limit := params.Limit
+	offset := params.Offset
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var args []any
+	query := `
+SELECT c.id, c.type, c.author, c.title, c.thread_id, c.parent_id, c.created
+FROM content c
+WHERE c.type IN ('post', 'reply')`
+
+	if params.Author != "" {
+		query += " AND c.author = ?"
+		args = append(args, params.Author)
+	}
+
+	query += " ORDER BY c.created DESC, c.rowid DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := database.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]models.ActivityEvent, 0)
+	for rows.Next() {
+		var item models.ActivityEvent
+		if err := rows.Scan(
+			&item.ID, &item.Type, &item.Author, &item.Title, &item.ThreadID, &item.ParentID, &item.Created,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
 	}
 	return out, rows.Err()
 }

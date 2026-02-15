@@ -47,6 +47,8 @@ func run(args []string) error {
 		return cmdWatch(args[1:])
 	case "search":
 		return cmdSearch(args[1:])
+	case "activity":
+		return cmdActivity(args[1:])
 	case "admin":
 		return cmdAdmin(args[1:])
 	default:
@@ -540,6 +542,31 @@ func cmdSearch(args []string) error {
 	return output.Print(resp, *format, *quiet)
 }
 
+func cmdActivity(args []string) error {
+	fs := flag.NewFlagSet("activity", flag.ContinueOnError)
+	limit := fs.Int("limit", 20, "Limit")
+	offset := fs.Int("offset", 0, "Offset")
+	author := fs.String("author", "", "Filter by author")
+	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
+	quiet := fs.Bool("quiet", false, "IDs only")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	path := "/api/v1/activity?limit=" + strconv.Itoa(*limit) + "&offset=" + strconv.Itoa(*offset)
+	if strings.TrimSpace(*author) != "" {
+		path += "&author=" + url.QueryEscape(strings.TrimSpace(*author))
+	}
+	var resp map[string]any
+	if err := cl.Get(path, &resp); err != nil {
+		return err
+	}
+	return output.Print(resp, *format, *quiet)
+}
+
 func cmdAdmin(args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: hive admin <export|stats>")
@@ -721,6 +748,7 @@ func usage() error {
   hive notifications clear
   hive watch [--interval 10s] [--thread id] [--tag tag]
   hive search <query> [--author x] [--tag x] [--since t] [--threads-only]
+  hive activity [--limit n] [--offset n] [--author a]
   hive admin export --format json|markdown --out <path> [--thread id] [--since t]
   hive admin stats
   hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id]

@@ -59,6 +59,12 @@ func printTable(payload map[string]any) error {
 			fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
 				str(row["id"]), str(row["author"]), str(row["title"]), str(row["status"]), str(row["created"]))
 		}
+	case hasKey(payload, "activity"):
+		fmt.Println("ID\tTYPE\tAUTHOR\tTHREAD\tCREATED")
+		for _, row := range toObjectSlice(payload["activity"]) {
+			fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
+				str(row["id"]), str(row["type"]), str(row["author"]), str(row["thread_id"]), str(row["created"]))
+		}
 	case hasKey(payload, "results"):
 		fmt.Println("ID\tTYPE\tAUTHOR\tCREATED\tSNIPPET")
 		for _, row := range toObjectSlice(payload["results"]) {
@@ -83,6 +89,10 @@ func printPlain(payload map[string]any) error {
 		for _, row := range toObjectSlice(payload["threads"]) {
 			fmt.Printf("%s %s %s\n", str(row["id"]), str(row["author"]), str(row["title"]))
 		}
+	case hasKey(payload, "activity"):
+		for _, row := range toObjectSlice(payload["activity"]) {
+			fmt.Printf("%s %s %s\n", str(row["id"]), str(row["type"]), str(row["author"]))
+		}
 	case hasKey(payload, "results"):
 		for _, row := range toObjectSlice(payload["results"]) {
 			fmt.Printf("%s %s %s\n", str(row["id"]), str(row["type"]), str(row["snippet"]))
@@ -104,6 +114,11 @@ func printMarkdown(payload map[string]any) error {
 			fmt.Printf("- `%s` **%s** by %s (%s)\n",
 				str(row["id"]), str(row["title"]), str(row["author"]), str(row["status"]))
 		}
+	case hasKey(payload, "activity"):
+		for _, row := range toObjectSlice(payload["activity"]) {
+			fmt.Printf("- `%s` %s by %s in thread `%s`\n",
+				str(row["id"]), str(row["type"]), str(row["author"]), str(row["thread_id"]))
+		}
 	case hasKey(payload, "results"):
 		for _, row := range toObjectSlice(payload["results"]) {
 			fmt.Printf("- `%s` %s: %s\n",
@@ -124,6 +139,10 @@ func printQuiet(payload map[string]any) error {
 	switch {
 	case hasKey(payload, "threads"):
 		for _, row := range toObjectSlice(payload["threads"]) {
+			fmt.Println(str(row["id"]))
+		}
+	case hasKey(payload, "activity"):
+		for _, row := range toObjectSlice(payload["activity"]) {
 			fmt.Println(str(row["id"]))
 		}
 	case hasKey(payload, "results"):

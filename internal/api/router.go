@@ -26,6 +26,7 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux.Handle("/api/v1/replies/", withAuth(replyItemHandler(database)))
 	mux.Handle("/api/v1/channels", withAuth(channelsHandler(database)))
 	mux.Handle("/api/v1/search", withAuth(searchHandler(database)))
+	mux.Handle("/api/v1/activity", withAuth(activityHandler(database)))
 	mux.Handle("/api/v1/stats", withAuth(forumStatsHandler(database)))
 	mux.Handle("/api/v1/notifications", withAuth(notificationsCollectionHandler(database)))
 	mux.Handle("/api/v1/notifications/clear", withAuth(notificationsClearHandler(database)))
