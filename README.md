@@ -23,77 +23,94 @@ SQLite is the single source of truth. No external DB or message broker is requir
 ## Prerequisites
 
 - Docker (recommended for server deployment)
-- Go 1.23+ (for local CLI/server builds)
+- `curl` + `tar` (for downloading CLI binaries)
 
-## Install From Scratch (Docker-first)
+## Install (No Clone Required)
 
-### 1. Clone and enter the repo
+### 1. Install CLI via public installer script (latest release)
 
 ```bash
-git clone <your-fork-or-repo-url> hive
-cd hive
+curl -fsSL "https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/hive-install.sh" | bash
 ```
 
-### 2. Start the server with Docker Compose
+Optional: pin version or install directory:
 
 ```bash
-docker compose up -d --build
+HIVE_VERSION=v0.1.1 INSTALL_DIR="$HOME/.local/bin" \
+  bash -c "$(curl -fsSL 'https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/hive-install.sh')"
 ```
 
-This uses `Dockerfile` + `docker-compose.yml` in the repo and persists data in named Docker volumes.
-On first boot, the service writes a bootstrap admin key to `/keys/admin.key` in the `hive-keys` volume.
+### 2. Run server from GHCR image (`docker run`)
 
 ```bash
-# Read bootstrap admin key from the running container
-docker compose exec hive cat /keys/admin.key
+mkdir -p "$HOME/.hive/data" "$HOME/.hive/keys"
+
+docker run -d \
+  --name hive-server \
+  -p 8080:8080 \
+  -v "$HOME/.hive/data:/data" \
+  -v "$HOME/.hive/keys:/keys" \
+  ghcr.io/koganei/hive-server:v0.1.1 \
+  --port 8080 \
+  --db /data/hive.db \
+  --admin-key-out /keys/admin.key
 ```
 
-### 3. Build and install the CLI locally
+Read bootstrap admin key:
 
 ```bash
-mkdir -p ./bin
-go build -o ./bin/hive ./hive
-export PATH="$(pwd)/bin:$PATH"
+cat "$HOME/.hive/keys/admin.key"
 ```
 
-### 4. Connect the CLI
+### 3. Connect CLI
 
 ```bash
-hive connect http://localhost:8080 --api-key "$(docker compose exec -T hive cat /keys/admin.key)"
+hive connect http://localhost:8080 --api-key "$(cat "$HOME/.hive/keys/admin.key")"
 hive whoami
 hive status
 ```
 
-### 5. Stop services
+### 4. Stop server (`docker run` mode)
 
 ```bash
-docker compose down
+docker stop hive-server
+docker rm hive-server
 ```
 
-## Install Prebuilt Binaries (No source build)
-
-Each Git tag release (for example `v0.1.0`) publishes binary archives to GitHub Releases for:
-
-- Linux (`amd64`, `arm64`)
-- macOS (`amd64`, `arm64`)
-- Windows (`amd64`)
-
-Each archive includes:
-
-- `hive`
-- `hive-server`
-- `hive-mcp`
-
-Example install on Linux/macOS:
+### 5. Run server from GHCR image (`docker compose`, no repo clone)
 
 ```bash
-VERSION=v0.1.0
-OS=linux      # or darwin
-ARCH=amd64    # or arm64
+mkdir -p "$HOME/.hive/deploy" "$HOME/.hive/data" "$HOME/.hive/keys"
+cat > "$HOME/.hive/deploy/docker-compose.yml" <<'EOF'
+services:
+  hive:
+    image: ghcr.io/koganei/hive-server:v0.1.1
+    container_name: hive-server
+    command: ["--port", "8080", "--db", "/data/hive.db", "--admin-key-out", "/keys/admin.key"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - "$HOME/.hive/data:/data"
+      - "$HOME/.hive/keys:/keys"
+    restart: unless-stopped
+EOF
 
-curl -LO "https://github.com/<owner>/<repo>/releases/download/${VERSION}/hive_${VERSION}_${OS}_${ARCH}.tar.gz"
-tar -xzf "hive_${VERSION}_${OS}_${ARCH}.tar.gz"
-mv "hive_${VERSION}_${OS}_${ARCH}"/* ./bin/
+docker compose -f "$HOME/.hive/deploy/docker-compose.yml" up -d
+cat "$HOME/.hive/keys/admin.key"
+```
+
+Stop compose deployment:
+
+```bash
+docker compose -f "$HOME/.hive/deploy/docker-compose.yml" down
+```
+
+## Build From Source (Optional)
+
+```bash
+git clone https://github.com/koganei/hive.git
+cd hive
+go build ./hive ./hive-server ./hive-mcp
 ```
 
 ## Quick Start Flow
@@ -355,27 +372,27 @@ This repo includes tag-based GitHub Actions workflows:
 - `.github/workflows/release.yml` for binary archives on GitHub Releases
 - `.github/workflows/docker-release.yml` for multi-arch Docker images on GHCR
 
-When you push a tag like `v0.1.0`, it will:
+When you push a tag like `v0.1.1`, it will:
 
 - run tests
 - build cross-platform archives for `hive`, `hive-server`, and `hive-mcp`
 - generate `checksums.txt`
 - publish assets to the GitHub Release for that tag
 - publish `hive-server` image to GHCR for `linux/amd64` and `linux/arm64`
-- tag Docker image as `ghcr.io/<owner>/hive-server:v0.1.0` and `ghcr.io/<owner>/hive-server:latest`
+- tag Docker image as `ghcr.io/koganei/hive-server:v0.1.1` and `ghcr.io/koganei/hive-server:latest`
 
 Create a release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 Use the published Docker image:
 
 ```bash
-docker pull ghcr.io/<owner>/hive-server:v0.1.0
-docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/<owner>/hive-server:v0.1.0 --port 8080 --db /data/hive.db
+docker pull ghcr.io/koganei/hive-server:v0.1.1
+docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/koganei/hive-server:v0.1.1 --port 8080 --db /data/hive.db
 ```
 
 If `docker pull` returns `403 Forbidden`, set the package visibility to public in GitHub:
