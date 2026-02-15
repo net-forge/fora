@@ -49,6 +49,8 @@ func run(args []string) error {
 		return cmdSearch(args[1:])
 	case "activity":
 		return cmdActivity(args[1:])
+	case "agent":
+		return cmdAgent(args[1:])
 	case "admin":
 		return cmdAdmin(args[1:])
 	default:
@@ -567,6 +569,116 @@ func cmdActivity(args []string) error {
 	return output.Print(resp, *format, *quiet)
 }
 
+func cmdAgent(args []string) error {
+	if len(args) == 0 {
+		return cmdAgentList(nil)
+	}
+	switch args[0] {
+	case "add":
+		return cmdAgentAdd(args[1:])
+	case "list":
+		return cmdAgentList(args[1:])
+	case "remove":
+		return cmdAgentRemove(args[1:])
+	case "info":
+		return cmdAgentInfo(args[1:])
+	default:
+		return errors.New("usage: hive agent <add|list|remove|info>")
+	}
+}
+
+func cmdAgentAdd(args []string) error {
+	fs := flag.NewFlagSet("agent add", flag.ContinueOnError)
+	role := fs.String("role", "agent", "Role: agent|admin")
+	metadata := fs.String("metadata", "", "Agent metadata")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: hive agent add <name> [--role role] [--metadata text]")
+	}
+	roleValue := strings.ToLower(strings.TrimSpace(*role))
+	if roleValue == "" {
+		roleValue = "agent"
+	}
+	if roleValue != "agent" && roleValue != "admin" {
+		return errors.New("role must be agent or admin")
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	req := map[string]any{
+		"name": fs.Arg(0),
+		"role": roleValue,
+	}
+	if strings.TrimSpace(*metadata) != "" {
+		req["metadata"] = strings.TrimSpace(*metadata)
+	}
+	var resp map[string]any
+	if err := cl.Post("/api/v1/agents", req, &resp); err != nil {
+		return err
+	}
+	return printJSON(resp)
+}
+
+func cmdAgentList(args []string) error {
+	fs := flag.NewFlagSet("agent list", flag.ContinueOnError)
+	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
+	quiet := fs.Bool("quiet", false, "IDs only")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: hive agent list [--format f] [--quiet]")
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	var resp map[string]any
+	if err := cl.Get("/api/v1/agents", &resp); err != nil {
+		return err
+	}
+	return output.Print(resp, *format, *quiet)
+}
+
+func cmdAgentRemove(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: hive agent remove <name>")
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	if err := cl.Delete("/api/v1/agents/" + url.PathEscape(args[0])); err != nil {
+		return err
+	}
+	fmt.Printf("removed agent %s\n", args[0])
+	return nil
+}
+
+func cmdAgentInfo(args []string) error {
+	fs := flag.NewFlagSet("agent info", flag.ContinueOnError)
+	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
+	quiet := fs.Bool("quiet", false, "IDs only")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: hive agent info <name> [--format f] [--quiet]")
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	var resp map[string]any
+	if err := cl.Get("/api/v1/agents/"+url.PathEscape(fs.Arg(0)), &resp); err != nil {
+		return err
+	}
+	return output.Print(resp, *format, *quiet)
+}
+
 func cmdAdmin(args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: hive admin <export|stats>")
@@ -749,6 +861,10 @@ func usage() error {
   hive watch [--interval 10s] [--thread id] [--tag tag]
   hive search <query> [--author x] [--tag x] [--since t] [--threads-only]
   hive activity [--limit n] [--offset n] [--author a]
+  hive agent add <name> [--role agent|admin] [--metadata text]
+  hive agent list [--format f] [--quiet]
+  hive agent info <name> [--format f] [--quiet]
+  hive agent remove <name>
   hive admin export --format json|markdown --out <path> [--thread id] [--since t]
   hive admin stats
   hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id]

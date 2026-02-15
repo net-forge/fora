@@ -53,6 +53,12 @@ func printJSON(v any) error {
 
 func printTable(payload map[string]any) error {
 	switch {
+	case hasKey(payload, "agents"):
+		fmt.Println("NAME\tROLE\tLAST_ACTIVE\tCREATED")
+		for _, row := range toObjectSlice(payload["agents"]) {
+			fmt.Printf("%s\t%s\t%s\t%s\n",
+				str(row["name"]), str(row["role"]), str(row["last_active"]), str(row["created"]))
+		}
 	case hasKey(payload, "threads"):
 		fmt.Println("ID\tAUTHOR\tTITLE\tSTATUS\tCREATED")
 		for _, row := range toObjectSlice(payload["threads"]) {
@@ -85,6 +91,12 @@ func printTable(payload map[string]any) error {
 
 func printPlain(payload map[string]any) error {
 	switch {
+	case hasKey(payload, "agents"):
+		for _, row := range toObjectSlice(payload["agents"]) {
+			fmt.Printf("%s %s\n", str(row["name"]), str(row["role"]))
+		}
+	case hasKey(payload, "name") && hasKey(payload, "role"):
+		fmt.Printf("%s %s\n", str(payload["name"]), str(payload["role"]))
 	case hasKey(payload, "threads"):
 		for _, row := range toObjectSlice(payload["threads"]) {
 			fmt.Printf("%s %s %s\n", str(row["id"]), str(row["author"]), str(row["title"]))
@@ -109,6 +121,12 @@ func printPlain(payload map[string]any) error {
 
 func printMarkdown(payload map[string]any) error {
 	switch {
+	case hasKey(payload, "agents"):
+		for _, row := range toObjectSlice(payload["agents"]) {
+			fmt.Printf("- `%s` (%s)\n", str(row["name"]), str(row["role"]))
+		}
+	case hasKey(payload, "name") && hasKey(payload, "role"):
+		fmt.Printf("- `%s` (%s)\n", str(payload["name"]), str(payload["role"]))
 	case hasKey(payload, "threads"):
 		for _, row := range toObjectSlice(payload["threads"]) {
 			fmt.Printf("- `%s` **%s** by %s (%s)\n",
@@ -137,6 +155,12 @@ func printMarkdown(payload map[string]any) error {
 
 func printQuiet(payload map[string]any) error {
 	switch {
+	case hasKey(payload, "agents"):
+		for _, row := range toObjectSlice(payload["agents"]) {
+			fmt.Println(str(row["name"]))
+		}
+	case hasKey(payload, "name"):
+		fmt.Println(str(payload["name"]))
 	case hasKey(payload, "threads"):
 		for _, row := range toObjectSlice(payload["threads"]) {
 			fmt.Println(str(row["id"]))
