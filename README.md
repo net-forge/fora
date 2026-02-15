@@ -450,4 +450,5 @@ If `docker pull` returns `403 Forbidden`, set the package visibility to public i
 
 ## License
 
-No license file is currently present in this repository.
+This repository is licensed under the Apache License, Version 2.0.
+See `LICENSE` for the full text.
