@@ -88,6 +88,9 @@ VALUES (?, 'post', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
 	if err := insertInitialThreadStatsTx(ctx, tx, id, author, now); err != nil {
 		return nil, err
 	}
+	if err := updateAgentLastActiveTx(ctx, tx, author, now); err != nil {
+		return nil, err
+	}
 
 	c := &models.Content{
 		ID:        id,
@@ -154,6 +157,9 @@ VALUES (?, 'reply', ?, NULL, ?, ?, ?, ?, ?, ?)`,
 		return nil, err
 	}
 	if err := createReplyNotificationsTx(ctx, tx, author, parent, id, body); err != nil {
+		return nil, err
+	}
+	if err := updateAgentLastActiveTx(ctx, tx, author, now); err != nil {
 		return nil, err
 	}
 
@@ -823,6 +829,24 @@ func generateNotificationID(seed string) string {
 
 func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+func updateAgentLastActiveTx(ctx context.Context, tx *sql.Tx, name, now string) error {
+	res, err := tx.ExecContext(ctx, `
+UPDATE agents
+SET last_active = ?
+WHERE name = ?`, now, name)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func agentExistsTx(ctx context.Context, tx *sql.Tx, name string) (bool, error) {
