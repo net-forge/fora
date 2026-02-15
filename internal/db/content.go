@@ -193,7 +193,7 @@ WHERE id = ?`, id)
 	return c, nil
 }
 
-func ListPosts(ctx context.Context, database *sql.DB, params ListPostsParams) ([]models.Content, error) {
+func ListPosts(ctx context.Context, database *sql.DB, params ListPostsParams) ([]models.ThreadListItem, int, error) {
 	limit := params.Limit
 	offset := params.Offset
 	if limit <= 0 || limit > 100 {
@@ -217,55 +217,78 @@ func ListPosts(ctx context.Context, database *sql.DB, params ListPostsParams) ([
 		order = "ASC"
 	}
 
-	var args []any
-	query := `
-SELECT c.id, c.type, c.author, c.title, c.body, c.created, c.updated, c.thread_id, c.parent_id, c.status, c.channel_id
+	whereClause, whereArgs := listPostsWhereClause(params)
+
+	countQuery := `
+SELECT COUNT(*)
 FROM content c
-LEFT JOIN thread_stats ts ON ts.thread_id = c.id
-WHERE c.type = 'post'`
+LEFT JOIN thread_stats ts ON ts.thread_id = c.id` + whereClause
+	var total int
+	if err := database.QueryRowContext(ctx, countQuery, whereArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
 
-	if params.Author != "" {
-		query += " AND c.author = ?"
-		args = append(args, params.Author)
-	}
-	if params.Status != "" {
-		query += " AND c.status = ?"
-		args = append(args, params.Status)
-	}
-	if params.Tag != "" {
-		query += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
-		args = append(args, params.Tag)
-	}
-	if params.Channel != "" {
-		query += " AND c.channel_id = ?"
-		args = append(args, params.Channel)
-	}
-	if params.Since != nil {
-		query += " AND COALESCE(ts.last_activity, c.created) >= ?"
-		args = append(args, params.Since.UTC().Format(time.RFC3339))
-	}
-	query += " ORDER BY " + sortField + " " + order + ", c.created DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	query := `
+SELECT c.id, c.type, c.author, c.title, c.body, c.created, c.updated, c.thread_id, c.parent_id, c.status, c.channel_id,
+       COALESCE(ts.reply_count, 0), COALESCE(ts.last_activity, c.created), COALESCE(ts.participants, '[]'), COALESCE(ts.participant_count, 1)
+FROM content c
+LEFT JOIN thread_stats ts ON ts.thread_id = c.id` + whereClause +
+		" ORDER BY " + sortField + " " + order + ", c.created DESC LIMIT ? OFFSET ?"
 
+	args := append(append([]any{}, whereArgs...), limit, offset)
 	rows, err := database.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	out := make([]models.Content, 0)
+	out := make([]models.ThreadListItem, 0)
 	for rows.Next() {
-		var c models.Content
+		var (
+			item             models.ThreadListItem
+			participantsJSON string
+		)
 		if err := rows.Scan(
-			&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created,
-			&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.ChannelID,
+			&item.ID, &item.Type, &item.Author, &item.Title, &item.Body, &item.Created,
+			&item.Updated, &item.ThreadID, &item.ParentID, &item.Status, &item.ChannelID,
+			&item.ReplyCount, &item.LastActivity, &participantsJSON, &item.ParticipantCount,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		c.Tags, _ = ListTags(ctx, database, c.ID)
-		out = append(out, c)
+		_ = json.Unmarshal([]byte(participantsJSON), &item.Participants)
+		item.Tags, _ = ListTags(ctx, database, item.ID)
+		out = append(out, item)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+func listPostsWhereClause(params ListPostsParams) (string, []any) {
+	var args []any
+	whereClause := "\nWHERE c.type = 'post'"
+	if params.Author != "" {
+		whereClause += " AND c.author = ?"
+		args = append(args, params.Author)
+	}
+	if params.Status != "" {
+		whereClause += " AND c.status = ?"
+		args = append(args, params.Status)
+	}
+	if params.Tag != "" {
+		whereClause += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
+		args = append(args, params.Tag)
+	}
+	if params.Channel != "" {
+		whereClause += " AND c.channel_id = ?"
+		args = append(args, params.Channel)
+	}
+	if params.Since != nil {
+		whereClause += " AND COALESCE(ts.last_activity, c.created) >= ?"
+		args = append(args, params.Since.UTC().Format(time.RFC3339))
+	}
+	return whereClause, args
 }
 
 func ListReplies(ctx context.Context, database *sql.DB, parentID string, limit, offset int) ([]models.Content, error) {

@@ -99,13 +99,14 @@ func postsCollectionHandler(database *sql.DB) http.Handler {
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			posts, err := db.ListPosts(r.Context(), database, params)
+			posts, total, err := db.ListPosts(r.Context(), database, params)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, "failed to list posts")
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"threads": posts,
+				"total":   total,
 				"limit":   params.Limit,
 				"offset":  params.Offset,
 			})

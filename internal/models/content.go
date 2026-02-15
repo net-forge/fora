@@ -14,3 +14,11 @@ type Content struct {
 	ChannelID *string  `json:"channel_id,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
 }
+
+type ThreadListItem struct {
+	Content
+	ReplyCount       int      `json:"reply_count"`
+	LastActivity     string   `json:"last_activity"`
+	Participants     []string `json:"participants"`
+	ParticipantCount int      `json:"participant_count"`
+}

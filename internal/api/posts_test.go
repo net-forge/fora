@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -40,11 +41,24 @@ func TestPostsAndRepliesLifecycle(t *testing.T) {
 		t.Fatalf("list posts status = %d", listResp.StatusCode)
 	}
 	var listBody struct {
-		Threads []models.Content `json:"threads"`
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
 	}
 	decodeJSON(t, listResp, &listBody)
 	if len(listBody.Threads) != 1 {
 		t.Fatalf("expected 1 thread, got %d", len(listBody.Threads))
+	}
+	if listBody.Total != 1 {
+		t.Fatalf("expected total 1, got %d", listBody.Total)
+	}
+	if listBody.Threads[0].ReplyCount != 0 {
+		t.Fatalf("expected reply_count 0, got %d", listBody.Threads[0].ReplyCount)
+	}
+	if listBody.Threads[0].LastActivity == "" {
+		t.Fatalf("expected last_activity to be set")
+	}
+	if len(listBody.Threads[0].Participants) != 1 || listBody.Threads[0].Participants[0] != post.Author {
+		t.Fatalf("unexpected participants: %+v", listBody.Threads[0].Participants)
 	}
 
 	readResp := doReq(t, server.URL, apiKey, http.MethodGet, "/api/v1/posts/"+post.ID, nil)
@@ -289,11 +303,15 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 		t.Fatalf("filter by author status = %d", filterByAuthor.StatusCode)
 	}
 	var byAuthor struct {
-		Threads []models.Content `json:"threads"`
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
 	}
 	decodeJSON(t, filterByAuthor, &byAuthor)
 	if len(byAuthor.Threads) != 1 || byAuthor.Threads[0].Author != "writer2" {
 		t.Fatalf("unexpected author filter result: %+v", byAuthor.Threads)
+	}
+	if byAuthor.Total != 1 {
+		t.Fatalf("unexpected author filter total: %d", byAuthor.Total)
 	}
 
 	filterByTag := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?tag=ops", nil)
@@ -301,11 +319,15 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 		t.Fatalf("filter by tag status = %d", filterByTag.StatusCode)
 	}
 	var byTag struct {
-		Threads []models.Content `json:"threads"`
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
 	}
 	decodeJSON(t, filterByTag, &byTag)
 	if len(byTag.Threads) != 1 || byTag.Threads[0].ID != p1.ID {
 		t.Fatalf("unexpected tag filter result: %+v", byTag.Threads)
+	}
+	if byTag.Total != 1 {
+		t.Fatalf("unexpected tag filter total: %d", byTag.Total)
 	}
 
 	sortByReplies := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?sort=replies&order=desc", nil)
@@ -313,11 +335,18 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 		t.Fatalf("sort by replies status = %d", sortByReplies.StatusCode)
 	}
 	var sorted struct {
-		Threads []models.Content `json:"threads"`
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
 	}
 	decodeJSON(t, sortByReplies, &sorted)
 	if len(sorted.Threads) < 2 || sorted.Threads[0].ID != p1.ID {
 		t.Fatalf("expected p1 first when sorting by replies, got %+v", sorted.Threads)
+	}
+	if sorted.Threads[0].ReplyCount != 1 {
+		t.Fatalf("expected first thread reply_count 1, got %d", sorted.Threads[0].ReplyCount)
+	}
+	if sorted.Total != 2 {
+		t.Fatalf("expected total 2 for sorted query, got %d", sorted.Total)
 	}
 
 	sinceInvalid := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?since=not-a-time", nil)
@@ -468,11 +497,53 @@ func TestPostTagUpdateEndpoint(t *testing.T) {
 		t.Fatalf("tag filtered list status = %d", filtered.StatusCode)
 	}
 	var payload struct {
-		Threads []models.Content `json:"threads"`
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
 	}
 	decodeJSON(t, filtered, &payload)
 	if len(payload.Threads) != 1 || payload.Threads[0].ID != post.ID {
 		t.Fatalf("tag filter mismatch")
+	}
+	if payload.Total != 1 {
+		t.Fatalf("tag filter total mismatch: %d", payload.Total)
+	}
+}
+
+func TestPostListTotalIndependentOfPageSize(t *testing.T) {
+	server, database, adminKey := setupTestServer(t)
+	defer server.Close()
+	defer database.Close()
+
+	for i := 0; i < 3; i++ {
+		postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
+			"title": "Page test",
+			"body":  "Body " + strconv.Itoa(i),
+		})
+		if postResp.StatusCode != http.StatusCreated {
+			t.Fatalf("create post status = %d", postResp.StatusCode)
+		}
+		_ = postResp.Body.Close()
+	}
+
+	listResp := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?limit=1&offset=1", nil)
+	if listResp.StatusCode != http.StatusOK {
+		t.Fatalf("list posts status = %d", listResp.StatusCode)
+	}
+	var payload struct {
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
+		Limit   int                     `json:"limit"`
+		Offset  int                     `json:"offset"`
+	}
+	decodeJSON(t, listResp, &payload)
+	if len(payload.Threads) != 1 {
+		t.Fatalf("expected page size 1, got %d", len(payload.Threads))
+	}
+	if payload.Total != 3 {
+		t.Fatalf("expected total 3, got %d", payload.Total)
+	}
+	if payload.Limit != 1 || payload.Offset != 1 {
+		t.Fatalf("unexpected pagination echo: limit=%d offset=%d", payload.Limit, payload.Offset)
 	}
 }
 
