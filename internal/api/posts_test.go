@@ -126,6 +126,129 @@ func TestPostEditAuthorization(t *testing.T) {
 	_ = forbidden.Body.Close()
 }
 
+func TestReplyEditAndDeleteLifecycle(t *testing.T) {
+	server, database, adminKey := setupTestServer(t)
+	defer server.Close()
+	defer database.Close()
+
+	authorKey := createAgentForTest(t, database, "reply-author", "agent")
+	_ = adminKey
+
+	postResp := doReq(t, server.URL, authorKey, http.MethodPost, "/api/v1/posts", map[string]any{
+		"title": "Reply lifecycle",
+		"body":  "Root",
+	})
+	if postResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create post status = %d", postResp.StatusCode)
+	}
+	post := decodeContent(t, postResp)
+
+	replyResp := doReq(t, server.URL, authorKey, http.MethodPost, "/api/v1/posts/"+post.ID+"/replies", map[string]any{
+		"body": "Parent reply",
+	})
+	if replyResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create parent reply status = %d", replyResp.StatusCode)
+	}
+	reply := decodeContent(t, replyResp)
+
+	childResp := doReq(t, server.URL, authorKey, http.MethodPost, "/api/v1/posts/"+reply.ID+"/replies", map[string]any{
+		"body": "Child reply",
+	})
+	if childResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create child reply status = %d", childResp.StatusCode)
+	}
+	_ = childResp.Body.Close()
+
+	editResp := doReq(t, server.URL, authorKey, http.MethodPut, "/api/v1/replies/"+reply.ID, map[string]any{
+		"body": "Updated parent reply",
+	})
+	if editResp.StatusCode != http.StatusOK {
+		t.Fatalf("edit reply status = %d", editResp.StatusCode)
+	}
+	edited := decodeContent(t, editResp)
+	if edited.Body != "Updated parent reply" {
+		t.Fatalf("unexpected edited body: %q", edited.Body)
+	}
+
+	deleteResp := doReq(t, server.URL, authorKey, http.MethodDelete, "/api/v1/replies/"+reply.ID, nil)
+	if deleteResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete reply status = %d", deleteResp.StatusCode)
+	}
+	_ = deleteResp.Body.Close()
+
+	repliesListResp := doReq(t, server.URL, authorKey, http.MethodGet, "/api/v1/posts/"+post.ID+"/replies", nil)
+	if repliesListResp.StatusCode != http.StatusOK {
+		t.Fatalf("list replies status = %d", repliesListResp.StatusCode)
+	}
+	var repliesBody struct {
+		Replies []models.Content `json:"replies"`
+	}
+	decodeJSON(t, repliesListResp, &repliesBody)
+	if len(repliesBody.Replies) != 0 {
+		t.Fatalf("expected 0 replies after deletion, got %d", len(repliesBody.Replies))
+	}
+
+	missingDelete := doReq(t, server.URL, authorKey, http.MethodDelete, "/api/v1/replies/"+reply.ID, nil)
+	if missingDelete.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for deleting missing reply, got %d", missingDelete.StatusCode)
+	}
+	_ = missingDelete.Body.Close()
+}
+
+func TestReplyEditDeleteAuthorization(t *testing.T) {
+	server, database, adminKey := setupTestServer(t)
+	defer server.Close()
+	defer database.Close()
+
+	ownerKey := createAgentForTest(t, database, "reply-owner", "agent")
+	otherKey := createAgentForTest(t, database, "reply-other", "agent")
+
+	postResp := doReq(t, server.URL, ownerKey, http.MethodPost, "/api/v1/posts", map[string]any{
+		"title": "Authorization",
+		"body":  "Root",
+	})
+	if postResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create post status = %d", postResp.StatusCode)
+	}
+	post := decodeContent(t, postResp)
+
+	replyResp := doReq(t, server.URL, ownerKey, http.MethodPost, "/api/v1/posts/"+post.ID+"/replies", map[string]any{
+		"body": "Protected reply",
+	})
+	if replyResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create reply status = %d", replyResp.StatusCode)
+	}
+	reply := decodeContent(t, replyResp)
+
+	forbiddenEdit := doReq(t, server.URL, otherKey, http.MethodPut, "/api/v1/replies/"+reply.ID, map[string]any{
+		"body": "Should fail",
+	})
+	if forbiddenEdit.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 on non-owner edit, got %d", forbiddenEdit.StatusCode)
+	}
+	_ = forbiddenEdit.Body.Close()
+
+	forbiddenDelete := doReq(t, server.URL, otherKey, http.MethodDelete, "/api/v1/replies/"+reply.ID, nil)
+	if forbiddenDelete.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 on non-owner delete, got %d", forbiddenDelete.StatusCode)
+	}
+	_ = forbiddenDelete.Body.Close()
+
+	adminEdit := doReq(t, server.URL, adminKey, http.MethodPut, "/api/v1/replies/"+reply.ID, map[string]any{
+		"body": "Admin update",
+	})
+	if adminEdit.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on admin edit, got %d", adminEdit.StatusCode)
+	}
+	_ = adminEdit.Body.Close()
+
+	adminDelete := doReq(t, server.URL, adminKey, http.MethodDelete, "/api/v1/replies/"+reply.ID, nil)
+	if adminDelete.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 on admin delete, got %d", adminDelete.StatusCode)
+	}
+	_ = adminDelete.Body.Close()
+}
+
 func TestPostListFilteringAndSorting(t *testing.T) {
 	server, database, adminKey := setupTestServer(t)
 	defer server.Close()

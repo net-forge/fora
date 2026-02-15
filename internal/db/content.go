@@ -384,6 +384,63 @@ WHERE id = ? AND type = 'post'`, title, body, now, id)
 	return GetContent(ctx, database, id)
 }
 
+func UpdateReply(ctx context.Context, database *sql.DB, id string, body string, editedBy string) (*models.Content, error) {
+	if strings.TrimSpace(body) == "" {
+		return nil, errors.New("body is required")
+	}
+	now := nowRFC3339()
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var (
+		oldTitle *string
+		oldBody  string
+	)
+	if err := tx.QueryRowContext(ctx, `
+SELECT title, body
+FROM content
+WHERE id = ? AND type = 'reply'`, id).Scan(&oldTitle, &oldBody); err != nil {
+		return nil, err
+	}
+
+	var version int
+	if err := tx.QueryRowContext(ctx, `
+SELECT COALESCE(MAX(version), 0)
+FROM content_history
+WHERE content_id = ?`, id).Scan(&version); err != nil {
+		return nil, err
+	}
+	version++
+
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO content_history (content_id, version, title, body, edited_by, edited_at)
+VALUES (?, ?, ?, ?, ?, ?)`, id, version, oldTitle, oldBody, editedBy, now); err != nil {
+		return nil, err
+	}
+
+	res, err := tx.ExecContext(ctx, `
+UPDATE content
+SET body = ?, updated = ?
+WHERE id = ? AND type = 'reply'`, body, now, id)
+	if err != nil {
+		return nil, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return GetContent(ctx, database, id)
+}
+
 func ListContentHistory(ctx context.Context, database *sql.DB, contentID string) ([]models.ContentHistory, error) {
 	rows, err := database.QueryContext(ctx, `
 SELECT content_id, version, title, body, edited_by, edited_at
@@ -456,6 +513,47 @@ func DeletePostThread(ctx context.Context, database *sql.DB, id string) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM thread_stats WHERE thread_id = ?`, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func DeleteReply(ctx context.Context, database *sql.DB, id string) error {
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var (
+		contentType string
+		threadID    string
+	)
+	if err := tx.QueryRowContext(ctx, `
+SELECT type, thread_id
+FROM content
+WHERE id = ?`, id).Scan(&contentType, &threadID); err != nil {
+		return err
+	}
+	if contentType != "reply" {
+		return errors.New("target is not a reply")
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+WITH RECURSIVE subtree(id) AS (
+	SELECT id FROM content WHERE id = ?
+	UNION ALL
+	SELECT c.id
+	FROM content c
+	INNER JOIN subtree s ON c.parent_id = s.id
+)
+DELETE FROM content
+WHERE id IN (SELECT id FROM subtree)`, id); err != nil {
+		return err
+	}
+
+	if err := rebuildThreadStatsTx(ctx, tx, threadID); err != nil {
 		return err
 	}
 
@@ -767,5 +865,64 @@ UPDATE thread_stats
 SET reply_count = ?, participant_count = ?, last_activity = ?, participants = ?
 WHERE thread_id = ?`,
 		replyCount, len(participants), now, string(participantsEncoded), threadID)
+	return err
+}
+
+func rebuildThreadStatsTx(ctx context.Context, tx *sql.Tx, threadID string) error {
+	rows, err := tx.QueryContext(ctx, `
+SELECT type, author, created
+FROM content
+WHERE thread_id = ?
+ORDER BY created ASC`, threadID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	replyCount := 0
+	lastActivity := ""
+	participants := make([]string, 0)
+	seen := map[string]struct{}{}
+
+	for rows.Next() {
+		var (
+			contentType string
+			author      string
+			created     string
+		)
+		if err := rows.Scan(&contentType, &author, &created); err != nil {
+			return err
+		}
+		if contentType == "reply" {
+			replyCount++
+		}
+		lastActivity = created
+		if _, ok := seen[author]; !ok {
+			seen[author] = struct{}{}
+			participants = append(participants, author)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if lastActivity == "" {
+		_, err := tx.ExecContext(ctx, `DELETE FROM thread_stats WHERE thread_id = ?`, threadID)
+		return err
+	}
+
+	participantsJSON, err := json.Marshal(participants)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+INSERT INTO thread_stats (thread_id, reply_count, participant_count, last_activity, participants)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(thread_id) DO UPDATE SET
+	reply_count = excluded.reply_count,
+	participant_count = excluded.participant_count,
+	last_activity = excluded.last_activity,
+	participants = excluded.participants`,
+		threadID, replyCount, len(participants), lastActivity, string(participantsJSON))
 	return err
 }

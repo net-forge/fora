@@ -23,6 +23,7 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux.Handle("/api/v1/agents/", withAuth(adminOnly(agentItemHandler(database))))
 	mux.Handle("/api/v1/posts", withAuth(postsCollectionHandler(database)))
 	mux.Handle("/api/v1/posts/", withAuth(postsScopedHandler(database)))
+	mux.Handle("/api/v1/replies/", withAuth(replyItemHandler(database)))
 	mux.Handle("/api/v1/channels", withAuth(channelsHandler(database)))
 	mux.Handle("/api/v1/search", withAuth(searchHandler(database)))
 	mux.Handle("/api/v1/stats", withAuth(forumStatsHandler(database)))

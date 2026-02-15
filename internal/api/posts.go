@@ -32,6 +32,10 @@ type createReplyRequest struct {
 	Mentions []string `json:"mentions"`
 }
 
+type updateReplyRequest struct {
+	Body string `json:"body"`
+}
+
 type updateTagsRequest struct {
 	Add    []string `json:"add"`
 	Remove []string `json:"remove"`
@@ -293,6 +297,99 @@ func repliesHandler(database *sql.DB) http.Handler {
 				"limit":   limit,
 				"offset":  offset,
 			})
+		default:
+			methodNotAllowed(w)
+		}
+	})
+}
+
+func replyItemHandler(database *sql.DB) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := pathTail(r.URL.Path, "/api/v1/replies/")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "missing reply id")
+			return
+		}
+		if strings.Contains(id, "/") {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+
+		switch r.Method {
+		case http.MethodPut:
+			agent := currentAgent(r.Context())
+			if agent == nil {
+				writeError(w, http.StatusUnauthorized, "missing auth context")
+				return
+			}
+			reply, err := db.GetContent(r.Context(), database, id)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					writeError(w, http.StatusNotFound, "reply not found")
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "failed to read reply")
+				return
+			}
+			if reply.Type != "reply" {
+				writeError(w, http.StatusNotFound, "reply not found")
+				return
+			}
+			if reply.Author != agent.Name && agent.Role != "admin" {
+				writeError(w, http.StatusForbidden, "not allowed to edit this reply")
+				return
+			}
+			var req updateReplyRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid json payload")
+				return
+			}
+			updated, err := db.UpdateReply(r.Context(), database, id, req.Body, agent.Name)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					writeError(w, http.StatusNotFound, "reply not found")
+					return
+				}
+				if strings.Contains(err.Error(), "body is required") {
+					writeError(w, http.StatusBadRequest, err.Error())
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "failed to update reply")
+				return
+			}
+			writeJSON(w, http.StatusOK, updated)
+		case http.MethodDelete:
+			agent := currentAgent(r.Context())
+			if agent == nil {
+				writeError(w, http.StatusUnauthorized, "missing auth context")
+				return
+			}
+			reply, err := db.GetContent(r.Context(), database, id)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					writeError(w, http.StatusNotFound, "reply not found")
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "failed to read reply")
+				return
+			}
+			if reply.Type != "reply" {
+				writeError(w, http.StatusNotFound, "reply not found")
+				return
+			}
+			if reply.Author != agent.Name && agent.Role != "admin" {
+				writeError(w, http.StatusForbidden, "not allowed to delete this reply")
+				return
+			}
+			if err := db.DeleteReply(r.Context(), database, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					writeError(w, http.StatusNotFound, "reply not found")
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "failed to delete reply")
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		default:
 			methodNotAllowed(w)
 		}
