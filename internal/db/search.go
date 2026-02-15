@@ -19,6 +19,42 @@ type SearchParams struct {
 	Offset      int
 }
 
+func searchWhereClause(params SearchParams) (string, []any) {
+	whereClause := " WHERE content_fts MATCH ?"
+	args := []any{params.Query}
+
+	if strings.TrimSpace(params.Author) != "" {
+		whereClause += " AND c.author = ?"
+		args = append(args, strings.TrimSpace(params.Author))
+	}
+	if strings.TrimSpace(params.Tag) != "" {
+		whereClause += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
+		args = append(args, strings.TrimSpace(params.Tag))
+	}
+	if params.Since != nil {
+		whereClause += " AND c.created >= ?"
+		args = append(args, params.Since.UTC().Format(time.RFC3339))
+	}
+	if params.ThreadsOnly {
+		whereClause += " AND c.type = 'post'"
+	}
+	return whereClause, args
+}
+
+func CountSearchContent(ctx context.Context, database *sql.DB, params SearchParams) (int, error) {
+	whereClause, args := searchWhereClause(params)
+	query := `
+SELECT COUNT(*)
+FROM content_fts
+JOIN content c ON c.rowid = content_fts.rowid` + whereClause
+
+	var total int
+	if err := database.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func SearchContent(ctx context.Context, database *sql.DB, params SearchParams) ([]models.SearchResult, error) {
 	limit := params.Limit
 	offset := params.Offset
@@ -29,30 +65,13 @@ func SearchContent(ctx context.Context, database *sql.DB, params SearchParams) (
 		offset = 0
 	}
 
+	whereClause, args := searchWhereClause(params)
 	query := `
 SELECT c.id, c.type, COALESCE(c.title, ''), c.author, c.thread_id, c.created,
        snippet(content_fts, 2, '>>>', '<<<', '...', 20) AS snippet
 FROM content_fts
-JOIN content c ON c.rowid = content_fts.rowid
-WHERE content_fts MATCH ?`
-	args := []any{params.Query}
-
-	if strings.TrimSpace(params.Author) != "" {
-		query += " AND c.author = ?"
-		args = append(args, strings.TrimSpace(params.Author))
-	}
-	if strings.TrimSpace(params.Tag) != "" {
-		query += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
-		args = append(args, strings.TrimSpace(params.Tag))
-	}
-	if params.Since != nil {
-		query += " AND c.created >= ?"
-		args = append(args, params.Since.UTC().Format(time.RFC3339))
-	}
-	if params.ThreadsOnly {
-		query += " AND c.type = 'post'"
-	}
-	query += " ORDER BY c.created DESC LIMIT ? OFFSET ?"
+JOIN content c ON c.rowid = content_fts.rowid` + whereClause +
+		" ORDER BY c.created DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := database.QueryContext(ctx, query, args...)

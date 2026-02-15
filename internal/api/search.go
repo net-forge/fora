@@ -47,9 +47,14 @@ func searchHandler(database *sql.DB) http.Handler {
 			writeError(w, http.StatusInternalServerError, "search failed")
 			return
 		}
+		total, err := db.CountSearchContent(r.Context(), database, params)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "search failed")
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"results": results,
-			"total":   len(results),
+			"total":   total,
 			"query":   q,
 		})
 	})

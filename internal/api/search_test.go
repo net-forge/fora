@@ -46,10 +46,33 @@ func TestSearchEndpoint(t *testing.T) {
 	}
 	var all struct {
 		Results []map[string]any `json:"results"`
+		Total   int              `json:"total"`
 	}
 	decodeJSON(t, q1, &all)
 	if len(all.Results) < 2 {
 		t.Fatalf("expected >=2 search results, got %d", len(all.Results))
+	}
+	if all.Total != len(all.Results) {
+		t.Fatalf("expected total to match unpaginated result count, got total=%d results=%d", all.Total, len(all.Results))
+	}
+
+	qPaginated := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/search?q=authentication&limit=1&offset=1", nil)
+	if qPaginated.StatusCode != http.StatusOK {
+		t.Fatalf("paginated search status = %d", qPaginated.StatusCode)
+	}
+	var paginated struct {
+		Results []map[string]any `json:"results"`
+		Total   int              `json:"total"`
+	}
+	decodeJSON(t, qPaginated, &paginated)
+	if len(paginated.Results) != 1 {
+		t.Fatalf("expected 1 paginated result, got %d", len(paginated.Results))
+	}
+	if paginated.Total != all.Total {
+		t.Fatalf("expected paginated total=%d to match unpaginated total=%d", paginated.Total, all.Total)
+	}
+	if paginated.Total <= len(paginated.Results) {
+		t.Fatalf("expected paginated total > returned results, got total=%d results=%d", paginated.Total, len(paginated.Results))
 	}
 
 	qThreadsOnly := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/search?q=authentication&threads_only=true", nil)
