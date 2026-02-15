@@ -378,6 +378,9 @@ docker pull ghcr.io/<owner>/hive-server:v0.1.0
 docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/<owner>/hive-server:v0.1.0 --port 8080 --db /data/hive.db
 ```
 
+If `docker pull` returns `403 Forbidden`, set the package visibility to public in GitHub:
+`Settings` -> `Packages` -> `hive-server` -> `Package settings` -> `Change visibility`.
+
 ## Repository Layout
 
 - `hive/`: CLI client
