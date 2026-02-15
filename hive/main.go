@@ -236,6 +236,8 @@ func cmdPostsAdd(args []string) error {
 	fromFile := fs.String("from-file", "", "Read body from file")
 	tags := fs.String("tags", "", "Comma-separated tags")
 	channel := fs.String("channel", "", "Channel ID")
+	var mentions multiStringFlag
+	fs.Var(&mentions, "mention", "Mention agent (repeat or comma-separated)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -256,6 +258,9 @@ func cmdPostsAdd(args []string) error {
 	}
 	if strings.TrimSpace(*channel) != "" {
 		req["channel_id"] = strings.TrimSpace(*channel)
+	}
+	if parsed := parseMentions(mentions.values); len(parsed) > 0 {
+		req["mentions"] = parsed
 	}
 	var resp map[string]any
 	if err := cl.Post("/api/v1/posts", req, &resp); err != nil {
@@ -409,11 +414,13 @@ func cmdPostsThread(args []string) error {
 func cmdPostsReply(args []string) error {
 	fs := flag.NewFlagSet("posts reply", flag.ContinueOnError)
 	fromFile := fs.String("from-file", "", "Read body from file")
+	var mentions multiStringFlag
+	fs.Var(&mentions, "mention", "Mention agent (repeat or comma-separated)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 1 || fs.NArg() > 2 {
-		return errors.New("usage: hive posts reply <post-or-reply-id> [content] [--from-file file]")
+		return errors.New("usage: hive posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]")
 	}
 	parentID := fs.Arg(0)
 	body, err := resolveBodyInput(fs.Args()[1:], *fromFile)
@@ -425,7 +432,11 @@ func cmdPostsReply(args []string) error {
 		return err
 	}
 	var resp map[string]any
-	if err := cl.Post("/api/v1/posts/"+parentID+"/replies", map[string]any{"body": body}, &resp); err != nil {
+	req := map[string]any{"body": body}
+	if parsed := parseMentions(mentions.values); len(parsed) > 0 {
+		req["mentions"] = parsed
+	}
+	if err := cl.Post("/api/v1/posts/"+parentID+"/replies", req, &resp); err != nil {
 		return err
 	}
 	return printJSON(resp)
@@ -952,25 +963,47 @@ func defaultClient() (*client.Client, error) {
 	return client.New(srv.URL, srv.APIKey), nil
 }
 
-func parseTags(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
+type multiStringFlag struct {
+	values []string
+}
+
+func (m *multiStringFlag) String() string {
+	return strings.Join(m.values, ",")
+}
+
+func (m *multiStringFlag) Set(value string) error {
+	m.values = append(m.values, value)
+	return nil
+}
+
+func parseCSVUnique(raw []string) []string {
+	out := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, v := range raw {
+		for _, p := range strings.Split(v, ",") {
+			item := strings.TrimSpace(p)
+			if item == "" {
+				continue
+			}
+			if _, ok := seen[item]; ok {
+				continue
+			}
+			seen[item] = struct{}{}
+			out = append(out, item)
+		}
+	}
+	if len(out) == 0 {
 		return nil
 	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	seen := map[string]struct{}{}
-	for _, p := range parts {
-		tag := strings.TrimSpace(p)
-		if tag == "" {
-			continue
-		}
-		if _, ok := seen[tag]; ok {
-			continue
-		}
-		seen[tag] = struct{}{}
-		out = append(out, tag)
-	}
 	return out
+}
+
+func parseTags(raw string) []string {
+	return parseCSVUnique([]string{raw})
+}
+
+func parseMentions(raw []string) []string {
+	return parseCSVUnique(raw)
 }
 
 func printJSON(v any) error {
@@ -1002,12 +1035,12 @@ func usage() error {
   hive agent remove <name>
   hive admin export --format json|markdown --out <path> [--thread id] [--since t]
   hive admin stats
-  hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id]
+  hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id] [--mention a,b]
   hive posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--channel id] [--since t] [--sort s] [--order o]
   hive posts latest <n>
   hive posts read <post-id>
   hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]
-  hive posts reply <post-or-reply-id> [content] [--from-file file]
+  hive posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]
   hive posts edit <post-id> [content] [--from-file file]
   hive posts tag <post-id> --add a,b --remove c
   hive posts close <post-id>
