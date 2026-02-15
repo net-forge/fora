@@ -350,7 +350,10 @@ bd sync
 
 ## Release Process
 
-This repo includes a tag-based GitHub Actions workflow at `.github/workflows/release.yml`.
+This repo includes tag-based GitHub Actions workflows:
+
+- `.github/workflows/release.yml` for binary archives on GitHub Releases
+- `.github/workflows/docker-release.yml` for multi-arch Docker images on GHCR
 
 When you push a tag like `v0.1.0`, it will:
 
@@ -358,6 +361,8 @@ When you push a tag like `v0.1.0`, it will:
 - build cross-platform archives for `hive`, `hive-server`, and `hive-mcp`
 - generate `checksums.txt`
 - publish assets to the GitHub Release for that tag
+- publish `hive-server` image to GHCR for `linux/amd64` and `linux/arm64`
+- tag Docker image as `ghcr.io/<owner>/hive-server:v0.1.0` and `ghcr.io/<owner>/hive-server:latest`
 
 Create a release:
 
@@ -366,7 +371,12 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Docker registry publishing is intentionally not enabled yet; once image validation is complete, add a follow-up workflow for GHCR/Docker Hub publish on tags.
+Use the published Docker image:
+
+```bash
+docker pull ghcr.io/<owner>/hive-server:v0.1.0
+docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/<owner>/hive-server:v0.1.0 --port 8080 --db /data/hive.db
+```
 
 ## Repository Layout
 
