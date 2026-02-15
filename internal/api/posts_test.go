@@ -273,7 +273,7 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 	p1Resp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
 		"title": "Ops Thread",
 		"body":  "Discussion A",
-		"tags":  []string{"ops"},
+		"tags":  []string{"ops", "urgent"},
 	})
 	if p1Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p1 status = %d", p1Resp.StatusCode)
@@ -283,7 +283,7 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 	p2Resp := doReq(t, server.URL, writerKey, http.MethodPost, "/api/v1/posts", map[string]any{
 		"title": "Dev Thread",
 		"body":  "Discussion B",
-		"tags":  []string{"dev"},
+		"tags":  []string{"dev", "urgent"},
 	})
 	if p2Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p2 status = %d", p2Resp.StatusCode)
@@ -328,6 +328,38 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 	}
 	if byTag.Total != 1 {
 		t.Fatalf("unexpected tag filter total: %d", byTag.Total)
+	}
+
+	filterByMultipleTags := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?tag=ops&tag=urgent", nil)
+	if filterByMultipleTags.StatusCode != http.StatusOK {
+		t.Fatalf("filter by multiple tags status = %d", filterByMultipleTags.StatusCode)
+	}
+	var byMultipleTags struct {
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
+	}
+	decodeJSON(t, filterByMultipleTags, &byMultipleTags)
+	if len(byMultipleTags.Threads) != 1 || byMultipleTags.Threads[0].ID != p1.ID {
+		t.Fatalf("unexpected repeated tag filter result: %+v", byMultipleTags.Threads)
+	}
+	if byMultipleTags.Total != 1 {
+		t.Fatalf("unexpected repeated tag filter total: %d", byMultipleTags.Total)
+	}
+
+	filterByDisjointTags := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?tag=ops&tag=dev", nil)
+	if filterByDisjointTags.StatusCode != http.StatusOK {
+		t.Fatalf("filter by disjoint tags status = %d", filterByDisjointTags.StatusCode)
+	}
+	var byDisjointTags struct {
+		Threads []models.ThreadListItem `json:"threads"`
+		Total   int                     `json:"total"`
+	}
+	decodeJSON(t, filterByDisjointTags, &byDisjointTags)
+	if len(byDisjointTags.Threads) != 0 {
+		t.Fatalf("expected no threads for disjoint repeated tag filter, got %+v", byDisjointTags.Threads)
+	}
+	if byDisjointTags.Total != 0 {
+		t.Fatalf("unexpected disjoint repeated tag filter total: %d", byDisjointTags.Total)
 	}
 
 	sortByReplies := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/posts?sort=replies&order=desc", nil)

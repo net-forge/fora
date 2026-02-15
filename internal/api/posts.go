@@ -730,7 +730,7 @@ func parseListPostsParams(r *http.Request) (db.ListPostsParams, error) {
 		Limit:   limit,
 		Offset:  offset,
 		Author:  strings.TrimSpace(q.Get("author")),
-		Tag:     strings.TrimSpace(q.Get("tag")),
+		Tags:    normalizedTagFilters(q["tag"]),
 		Channel: strings.TrimSpace(q.Get("channel")),
 		Status:  strings.TrimSpace(q.Get("status")),
 		Sort:    strings.TrimSpace(q.Get("sort")),
@@ -766,6 +766,26 @@ func parseListPostsParams(r *http.Request) (db.ListPostsParams, error) {
 		params.Since = &t
 	}
 	return params, nil
+}
+
+func normalizedTagFilters(rawTags []string) []string {
+	if len(rawTags) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(rawTags))
+	seen := make(map[string]struct{}, len(rawTags))
+	for _, raw := range rawTags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+	}
+	return out
 }
 
 func parseSince(raw string) (time.Time, error) {

@@ -31,7 +31,7 @@ type ListPostsParams struct {
 	Offset int
 
 	Author  string
-	Tag     string
+	Tags    []string
 	Channel string
 	Status  string
 	Since   *time.Time
@@ -282,9 +282,12 @@ func listPostsWhereClause(params ListPostsParams) (string, []any) {
 		whereClause += " AND c.status = ?"
 		args = append(args, params.Status)
 	}
-	if params.Tag != "" {
+	for _, tag := range params.Tags {
+		if tag == "" {
+			continue
+		}
 		whereClause += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
-		args = append(args, params.Tag)
+		args = append(args, tag)
 	}
 	if params.Channel != "" {
 		whereClause += " AND c.channel_id = ?"

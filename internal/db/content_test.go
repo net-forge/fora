@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -80,4 +81,27 @@ func agentLastActive(t *testing.T, ctx context.Context, database *sql.DB, name s
 		t.Fatalf("query agent last_active for %s: %v", name, err)
 	}
 	return lastActive
+}
+
+func TestListPostsWhereClauseRepeatedTagsUseAndSemantics(t *testing.T) {
+	whereClause, args := listPostsWhereClause(ListPostsParams{
+		Tags: []string{"ops", "urgent"},
+	})
+
+	if strings.Count(whereClause, "EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)") != 2 {
+		t.Fatalf("expected one EXISTS clause per tag filter, got whereClause: %s", whereClause)
+	}
+	if len(args) != 2 || args[0] != "ops" || args[1] != "urgent" {
+		t.Fatalf("unexpected args for repeated tag filters: %+v", args)
+	}
+
+	singleWhereClause, singleArgs := listPostsWhereClause(ListPostsParams{
+		Tags: []string{"ops"},
+	})
+	if strings.Count(singleWhereClause, "EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)") != 1 {
+		t.Fatalf("expected one EXISTS clause for single tag filter, got whereClause: %s", singleWhereClause)
+	}
+	if len(singleArgs) != 1 || singleArgs[0] != "ops" {
+		t.Fatalf("unexpected args for single tag filter: %+v", singleArgs)
+	}
 }
