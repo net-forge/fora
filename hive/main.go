@@ -200,17 +200,23 @@ func cmdChannels(args []string) error {
 
 func cmdPosts(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: hive posts <add|list|read|reply|tag|close|reopen|pin>")
+		return errors.New("usage: hive posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
 	}
 	switch args[0] {
 	case "add":
 		return cmdPostsAdd(args[1:])
 	case "list":
 		return cmdPostsList(args[1:])
+	case "latest":
+		return cmdPostsLatest(args[1:])
 	case "read":
 		return cmdPostsRead(args[1:])
+	case "thread":
+		return cmdPostsThread(args[1:])
 	case "reply":
 		return cmdPostsReply(args[1:])
+	case "edit":
+		return cmdPostsEdit(args[1:])
 	case "tag":
 		return cmdPostsTag(args[1:])
 	case "close":
@@ -220,7 +226,7 @@ func cmdPosts(args []string) error {
 	case "pin":
 		return cmdPostsStatus(args[1:], "pinned")
 	default:
-		return errors.New("usage: hive posts <add|list|read|reply|tag|close|reopen|pin>")
+		return errors.New("usage: hive posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
 	}
 }
 
@@ -322,6 +328,84 @@ func cmdPostsRead(args []string) error {
 	return printJSON(resp)
 }
 
+func cmdPostsLatest(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: hive posts latest <n>")
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(args[0]))
+	if err != nil || limit <= 0 {
+		return errors.New("latest requires a positive integer limit")
+	}
+	return cmdPostsList([]string{"--limit", strconv.Itoa(limit)})
+}
+
+func cmdPostsThread(args []string) error {
+	fs := flag.NewFlagSet("posts thread", flag.ContinueOnError)
+	raw := fs.Bool("raw", false, "Output concatenated raw markdown")
+	depth := fs.Int("depth", 0, "Max reply depth (0 = unlimited)")
+	since := fs.String("since", "", "Filter replies by date/duration")
+	flat := fs.Bool("flat", false, "Request flat view when supported by server")
+
+	var postID string
+	parseArgs := args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		postID = strings.TrimSpace(args[0])
+		parseArgs = args[1:]
+	}
+	if err := fs.Parse(parseArgs); err != nil {
+		return err
+	}
+	if postID == "" {
+		if fs.NArg() != 1 {
+			return errors.New("usage: hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
+		}
+		postID = strings.TrimSpace(fs.Arg(0))
+	}
+	if postID == "" {
+		return errors.New("usage: hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
+	}
+	if *depth < 0 {
+		return errors.New("depth must be >= 0")
+	}
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+
+	path := "/api/v1/posts/" + postID + "/thread"
+	params := make([]string, 0, 4)
+	if *raw {
+		params = append(params, "format=raw")
+	}
+	if *depth > 0 {
+		params = append(params, "depth="+strconv.Itoa(*depth))
+	}
+	if strings.TrimSpace(*since) != "" {
+		params = append(params, "since="+url.QueryEscape(strings.TrimSpace(*since)))
+	}
+	if *flat {
+		params = append(params, "flat=true")
+	}
+	if len(params) > 0 {
+		path += "?" + strings.Join(params, "&")
+	}
+
+	if *raw {
+		text, err := cl.GetRaw(path)
+		if err != nil {
+			return err
+		}
+		fmt.Print(text)
+		return nil
+	}
+
+	var resp map[string]any
+	if err := cl.Get(path, &resp); err != nil {
+		return err
+	}
+	return printJSON(resp)
+}
+
 func cmdPostsReply(args []string) error {
 	fs := flag.NewFlagSet("posts reply", flag.ContinueOnError)
 	fromFile := fs.String("from-file", "", "Read body from file")
@@ -342,6 +426,57 @@ func cmdPostsReply(args []string) error {
 	}
 	var resp map[string]any
 	if err := cl.Post("/api/v1/posts/"+parentID+"/replies", map[string]any{"body": body}, &resp); err != nil {
+		return err
+	}
+	return printJSON(resp)
+}
+
+func cmdPostsEdit(args []string) error {
+	fs := flag.NewFlagSet("posts edit", flag.ContinueOnError)
+	fromFile := fs.String("from-file", "", "Read body from file")
+
+	var postID string
+	parseArgs := args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		postID = strings.TrimSpace(args[0])
+		parseArgs = args[1:]
+	}
+	if err := fs.Parse(parseArgs); err != nil {
+		return err
+	}
+
+	contentArgs := fs.Args()
+	if postID == "" {
+		if fs.NArg() < 1 || fs.NArg() > 2 {
+			return errors.New("usage: hive posts edit <post-id> [content] [--from-file file]")
+		}
+		postID = strings.TrimSpace(fs.Arg(0))
+		contentArgs = fs.Args()[1:]
+	}
+	if postID == "" || len(contentArgs) > 1 {
+		return errors.New("usage: hive posts edit <post-id> [content] [--from-file file]")
+	}
+	body, err := resolveBodyInput(contentArgs, *fromFile)
+	if err != nil {
+		return err
+	}
+
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+
+	var current map[string]any
+	if err := cl.Get("/api/v1/posts/"+postID, &current); err != nil {
+		return err
+	}
+	req := map[string]any{"body": body}
+	if title, ok := current["title"]; ok {
+		req["title"] = title
+	}
+
+	var resp map[string]any
+	if err := cl.Put("/api/v1/posts/"+postID, req, &resp); err != nil {
 		return err
 	}
 	return printJSON(resp)
@@ -869,8 +1004,11 @@ func usage() error {
   hive admin stats
   hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id]
   hive posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--channel id] [--since t] [--sort s] [--order o]
+  hive posts latest <n>
   hive posts read <post-id>
+  hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]
   hive posts reply <post-or-reply-id> [content] [--from-file file]
+  hive posts edit <post-id> [content] [--from-file file]
   hive posts tag <post-id> --add a,b --remove c
   hive posts close <post-id>
   hive posts reopen <post-id>
