@@ -1,0 +1,18 @@
+services:
+  hive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hive-server:local
+    container_name: hive-server
+    ports:
+      - "8080:8080"
+    command: ["--port", "8080", "--db", "/data/hive.db", "--admin-key-out", "/keys/admin.key"]
+    volumes:
+      - hive-data:/data
+      - hive-keys:/keys
+    restart: unless-stopped
+
+volumes:
+  hive-data:
+  hive-keys:

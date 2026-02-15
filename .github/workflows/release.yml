@@ -1,0 +1,105 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./...
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build release artifacts
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ github.ref_name }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+
+          EXE=""
+          if [ "$GOOS" = "windows" ]; then
+            EXE=".exe"
+          fi
+
+          STAGE_DIR="dist/stage/hive_${VERSION}_${GOOS}_${GOARCH}"
+          mkdir -p "$STAGE_DIR"
+
+          go build -trimpath -o "$STAGE_DIR/hive${EXE}" ./hive
+          go build -trimpath -o "$STAGE_DIR/hive-server${EXE}" ./hive-server
+          go build -trimpath -o "$STAGE_DIR/hive-mcp${EXE}" ./hive-mcp
+
+          mkdir -p dist/release
+          if [ "$GOOS" = "windows" ]; then
+            (cd dist/stage && zip -rq "../release/hive_${VERSION}_${GOOS}_${GOARCH}.zip" "hive_${VERSION}_${GOOS}_${GOARCH}")
+          else
+            tar -C dist/stage -czf "dist/release/hive_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "hive_${VERSION}_${GOOS}_${GOARCH}"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/artifacts
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/artifacts
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z | xargs -0 sha256sum > checksums.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/artifacts/**/*.tar.gz
+            dist/artifacts/**/*.zip
+            dist/artifacts/checksums.txt
+          generate_release_notes: true

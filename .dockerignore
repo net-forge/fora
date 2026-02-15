@@ -1,0 +1,11 @@
+.git
+.github
+.beads
+bin
+dist
+.local
+*.db
+*.log
+README.md
+idea.md
+idea_vs_implementation_breakdown.md

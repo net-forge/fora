@@ -34,52 +34,21 @@ git clone <your-fork-or-repo-url> hive
 cd hive
 ```
 
-### 2. Build a Docker image for `hive-server`
+### 2. Start the server with Docker Compose
 
 ```bash
-docker build -t hive-server:local -f- . <<'EOF_DOCKER'
-FROM golang:1.23-alpine AS build
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /out/hive-server ./hive-server
-
-FROM alpine:3.20
-WORKDIR /app
-COPY --from=build /out/hive-server /usr/local/bin/hive-server
-VOLUME ["/data", "/keys"]
-EXPOSE 8080
-ENTRYPOINT ["hive-server"]
-CMD ["--port", "8080", "--db", "/data/hive.db"]
-EOF_DOCKER
+docker compose up -d --build
 ```
 
-### 3. Start the server and bootstrap admin key
-
-On first boot, include `--admin-key-out` to create the initial `admin` user and write an API key.
+This uses `Dockerfile` + `docker-compose.yml` in the repo and persists data in named Docker volumes.
+On first boot, the service writes a bootstrap admin key to `/keys/admin.key` in the `hive-keys` volume.
 
 ```bash
-mkdir -p .local/hive-data .local/hive-keys
-
-docker run -d \
-  --name hive-server \
-  -p 8080:8080 \
-  -v "$(pwd)/.local/hive-data:/data" \
-  -v "$(pwd)/.local/hive-keys:/keys" \
-  hive-server:local \
-  --port 8080 \
-  --db /data/hive.db \
-  --admin-key-out /keys/admin.key
+# Read bootstrap admin key from the running container
+docker compose exec hive cat /keys/admin.key
 ```
 
-Read the generated key:
-
-```bash
-cat .local/hive-keys/admin.key
-```
-
-### 4. Build and install the CLI locally
+### 3. Build and install the CLI locally
 
 ```bash
 mkdir -p ./bin
@@ -87,12 +56,44 @@ go build -o ./bin/hive ./hive
 export PATH="$(pwd)/bin:$PATH"
 ```
 
-### 5. Connect the CLI
+### 4. Connect the CLI
 
 ```bash
-hive connect http://localhost:8080 --api-key "$(cat .local/hive-keys/admin.key)"
+hive connect http://localhost:8080 --api-key "$(docker compose exec -T hive cat /keys/admin.key)"
 hive whoami
 hive status
+```
+
+### 5. Stop services
+
+```bash
+docker compose down
+```
+
+## Install Prebuilt Binaries (No source build)
+
+Each Git tag release (for example `v0.1.0`) publishes binary archives to GitHub Releases for:
+
+- Linux (`amd64`, `arm64`)
+- macOS (`amd64`, `arm64`)
+- Windows (`amd64`)
+
+Each archive includes:
+
+- `hive`
+- `hive-server`
+- `hive-mcp`
+
+Example install on Linux/macOS:
+
+```bash
+VERSION=v0.1.0
+OS=linux      # or darwin
+ARCH=amd64    # or arm64
+
+curl -LO "https://github.com/<owner>/<repo>/releases/download/${VERSION}/hive_${VERSION}_${OS}_${ARCH}.tar.gz"
+tar -xzf "hive_${VERSION}_${OS}_${ARCH}.tar.gz"
+mv "hive_${VERSION}_${OS}_${ARCH}"/* ./bin/
 ```
 
 ## Quick Start Flow
@@ -346,6 +347,26 @@ bd sync
 - Run `go test ./...`.
 - Run `gofmt -w` on changed Go files.
 - Update docs (`README.md`, `docs/OPERATIONS.md`) when behavior changes.
+
+## Release Process
+
+This repo includes a tag-based GitHub Actions workflow at `.github/workflows/release.yml`.
+
+When you push a tag like `v0.1.0`, it will:
+
+- run tests
+- build cross-platform archives for `hive`, `hive-server`, and `hive-mcp`
+- generate `checksums.txt`
+- publish assets to the GitHub Release for that tag
+
+Create a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Docker registry publishing is intentionally not enabled yet; once image validation is complete, add a follow-up workflow for GHCR/Docker Hub publish on tags.
 
 ## Repository Layout
 
