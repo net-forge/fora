@@ -15,7 +15,7 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux := http.NewServeMux()
 	limiter := ratelimit.NewLimiter()
 	withAuth := func(h http.Handler) http.Handler {
-		return authMiddleware(database, rateLimitMiddleware(limiter, h))
+		return authMiddleware(database, rateLimitMiddleware(database, limiter, h))
 	}
 
 	mux.HandleFunc("/api/v1/status", statusHandler(database, version))

@@ -75,7 +75,7 @@ func currentAgent(ctx context.Context) *models.Agent {
 	return agent
 }
 
-func rateLimitMiddleware(limiter *ratelimit.Limiter, next http.Handler) http.Handler {
+func rateLimitMiddleware(database *sql.DB, limiter *ratelimit.Limiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		agent := currentAgent(r.Context())
 		if agent == nil {
@@ -88,15 +88,21 @@ func rateLimitMiddleware(limiter *ratelimit.Limiter, next http.Handler) http.Han
 		for _, c := range checks {
 			key := agent.Name + ":" + c.name
 			res := limiter.Allow(key, c.limit, c.window, now)
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(res.Remaining))
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(res.ResetAt.Unix(), 10))
+			setRateLimitHeaders(w, res.Limit, res.Remaining, res.ResetAt)
 			if !res.Allowed {
-				retryAfter := int(time.Until(res.ResetAt).Seconds())
-				if retryAfter < 1 {
-					retryAfter = 1
-				}
-				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+				setRetryAfter(w, res.ResetAt)
+				writeError(w, http.StatusTooManyRequests, "rate limit exceeded: "+c.name)
+				return
+			}
+
+			count, resetAt, supported, err := dbRateLimitUsage(r.Context(), database, agent.Name, c, now)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to enforce rate limit")
+				return
+			}
+			if supported && count >= c.limit {
+				setRateLimitHeaders(w, c.limit, 0, resetAt)
+				setRetryAfter(w, resetAt)
 				writeError(w, http.StatusTooManyRequests, "rate limit exceeded: "+c.name)
 				return
 			}
@@ -104,6 +110,41 @@ func rateLimitMiddleware(limiter *ratelimit.Limiter, next http.Handler) http.Han
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func dbRateLimitUsage(ctx context.Context, database *sql.DB, author string, check rateCheck, now time.Time) (count int, resetAt time.Time, supported bool, err error) {
+	since := now.Add(-check.window)
+	var contentType string
+	if check.name == "posts" {
+		contentType = "post"
+	} else if check.name == "replies" {
+		contentType = "reply"
+	} else if check.name != "writes" {
+		return 0, now.Add(check.window), false, nil
+	}
+
+	count, oldest, err := db.CountContentByAuthorSince(ctx, database, author, since, contentType)
+	if err != nil {
+		return 0, time.Time{}, false, err
+	}
+	if oldest != nil {
+		return count, oldest.Add(check.window), true, nil
+	}
+	return count, now.Add(check.window), true, nil
+}
+
+func setRateLimitHeaders(w http.ResponseWriter, limit, remaining int, resetAt time.Time) {
+	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt.Unix(), 10))
+}
+
+func setRetryAfter(w http.ResponseWriter, resetAt time.Time) {
+	retryAfter := int(time.Until(resetAt).Seconds())
+	if retryAfter < 1 {
+		retryAfter = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 }
 
 type rateCheck struct {
