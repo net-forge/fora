@@ -17,6 +17,21 @@ var migrations = []migration{
 		name:    "initial_schema",
 		sql:     initialSchemaV1,
 	},
+	{
+		version: 2,
+		name:    "edit_history",
+		sql:     editHistorySchemaV2,
+	},
+	{
+		version: 3,
+		name:    "webhooks",
+		sql:     webhooksSchemaV3,
+	},
+	{
+		version: 4,
+		name:    "channels",
+		sql:     channelsSchemaV4,
+	},
 }
 
 func ApplyMigrations(database *sql.DB) error {

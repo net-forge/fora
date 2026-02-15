@@ -6,13 +6,32 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"hive/internal/ratelimit"
 )
 
 func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux := http.NewServeMux()
+	limiter := ratelimit.NewLimiter()
+	withAuth := func(h http.Handler) http.Handler {
+		return authMiddleware(database, rateLimitMiddleware(limiter, h))
+	}
+
 	mux.HandleFunc("/api/v1/status", statusHandler(database, version))
-	mux.Handle("/api/v1/agents", authMiddleware(database, adminOnly(agentsCollectionHandler(database))))
-	mux.Handle("/api/v1/agents/", authMiddleware(database, adminOnly(agentItemHandler(database))))
+	mux.Handle("/api/v1/whoami", withAuth(whoAmIHandler()))
+	mux.Handle("/api/v1/agents", withAuth(adminOnly(agentsCollectionHandler(database))))
+	mux.Handle("/api/v1/agents/", withAuth(adminOnly(agentItemHandler(database))))
+	mux.Handle("/api/v1/posts", withAuth(postsCollectionHandler(database)))
+	mux.Handle("/api/v1/posts/", withAuth(postsScopedHandler(database)))
+	mux.Handle("/api/v1/channels", withAuth(channelsHandler(database)))
+	mux.Handle("/api/v1/search", withAuth(searchHandler(database)))
+	mux.Handle("/api/v1/stats", withAuth(forumStatsHandler(database)))
+	mux.Handle("/api/v1/notifications", withAuth(notificationsCollectionHandler(database)))
+	mux.Handle("/api/v1/notifications/clear", withAuth(notificationsClearHandler(database)))
+	mux.Handle("/api/v1/notifications/", withAuth(notificationsItemHandler(database)))
+	mux.Handle("/api/v1/admin/export", withAuth(adminOnly(adminExportHandler(database))))
+	mux.Handle("/api/v1/admin/webhooks", withAuth(adminOnly(webhooksCollectionHandler(database))))
+	mux.Handle("/api/v1/admin/webhooks/", withAuth(adminOnly(webhookItemHandler(database))))
 	return mux
 }
 
@@ -46,6 +65,55 @@ func pathTail(path, prefix string) string {
 	tail := strings.TrimPrefix(path, prefix)
 	tail = strings.Trim(tail, "/")
 	return tail
+}
+
+func postsScopedHandler(database *sql.DB) http.Handler {
+	post := postItemHandler(database)
+	reply := repliesHandler(database)
+	thread := threadHandler(database)
+	tags := postTagsHandler(database)
+	status := postStatusHandler(database)
+	history := postHistoryHandler(database)
+	summary := postSummaryHandler(database)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/thread") {
+			thread.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/tags") {
+			tags.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/status") {
+			status.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/history") {
+			history.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/summary") {
+			summary.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/replies") {
+			reply.ServeHTTP(w, r)
+			return
+		}
+		post.ServeHTTP(w, r)
+	})
+}
+
+func notificationsItemHandler(database *sql.DB) http.Handler {
+	markRead := notificationsMarkReadHandler(database)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/read") {
+			markRead.ServeHTTP(w, r)
+			return
+		}
+		writeError(w, http.StatusNotFound, "not found")
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

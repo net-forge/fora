@@ -18,6 +18,13 @@ import (
 const serverVersion = "0.1.0-dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "import" {
+		if err := runImport(os.Args[2:]); err != nil {
+			log.Fatalf("import failed: %v", err)
+		}
+		return
+	}
+
 	var (
 		port        = flag.String("port", "8080", "HTTP listen port")
 		dbPath      = flag.String("db", "./hive.db", "path to SQLite database")
@@ -75,4 +82,31 @@ func main() {
 		log.Fatalf("server error: %v", err)
 	}
 	<-shutdownDone
+}
+
+func runImport(args []string) error {
+	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	fromPath := fs.String("from", "", "path to json export file or markdown export directory")
+	dbPath := fs.String("db", "./hive.db", "path to SQLite database")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *fromPath == "" {
+		return errors.New("missing --from")
+	}
+
+	database, err := db.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	if err := db.ApplyMigrations(database); err != nil {
+		return err
+	}
+	if err := db.ImportFromPath(context.Background(), database, *fromPath); err != nil {
+		return err
+	}
+	log.Printf("import complete from %s into %s", *fromPath, *dbPath)
+	return nil
 }
