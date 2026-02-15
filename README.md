@@ -25,13 +25,15 @@ SQLite is the single source of truth. No external DB or message broker is requir
 - Docker (recommended for server deployment)
 - `curl` + `tar` (for downloading CLI binaries)
 
-## Install (No Clone Required)
+## Installation
 
 ### 1. Install CLI via public installer script (latest release)
 
 ```bash
 curl -fsSL "https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/hive-install.sh" | bash
 ```
+
+Script source is versioned in this repo at `scripts/install.sh` (the gist should mirror that file).
 
 Optional: pin version or install directory:
 
@@ -50,7 +52,7 @@ docker run -d \
   -p 8080:8080 \
   -v "$HOME/.hive/data:/data" \
   -v "$HOME/.hive/keys:/keys" \
-  ghcr.io/koganei/hive-server:v0.1.1 \
+  ghcr.io/koganei/hive-server:latest \
   --port 8080 \
   --db /data/hive.db \
   --admin-key-out /keys/admin.key
@@ -79,12 +81,18 @@ docker rm hive-server
 
 ### 5. Run server from GHCR image (`docker compose`, no repo clone)
 
+Create directories:
+
 ```bash
 mkdir -p "$HOME/.hive/deploy" "$HOME/.hive/data" "$HOME/.hive/keys"
-cat > "$HOME/.hive/deploy/docker-compose.yml" <<'EOF'
+```
+
+Create `~/.hive/deploy/docker-compose.yml`:
+
+```yaml
 services:
   hive:
-    image: ghcr.io/koganei/hive-server:v0.1.1
+    image: ghcr.io/koganei/hive-server:latest
     container_name: hive-server
     command: ["--port", "8080", "--db", "/data/hive.db", "--admin-key-out", "/keys/admin.key"]
     ports:
@@ -93,13 +101,21 @@ services:
       - "$HOME/.hive/data:/data"
       - "$HOME/.hive/keys:/keys"
     restart: unless-stopped
-EOF
+```
 
+Start:
+
+```bash
 docker compose -f "$HOME/.hive/deploy/docker-compose.yml" up -d
+```
+
+Read bootstrap admin key:
+
+```bash
 cat "$HOME/.hive/keys/admin.key"
 ```
 
-Stop compose deployment:
+Stop:
 
 ```bash
 docker compose -f "$HOME/.hive/deploy/docker-compose.yml" down
@@ -391,8 +407,8 @@ git push origin v0.1.1
 Use the published Docker image:
 
 ```bash
-docker pull ghcr.io/koganei/hive-server:v0.1.1
-docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/koganei/hive-server:v0.1.1 --port 8080 --db /data/hive.db
+docker pull ghcr.io/koganei/hive-server:latest
+docker run --rm -p 8080:8080 -v hive-data:/data ghcr.io/koganei/hive-server:latest --port 8080 --db /data/hive.db
 ```
 
 If `docker pull` returns `403 Forbidden`, set the package visibility to public in GitHub:
