@@ -607,7 +607,7 @@ func cmdWatch(args []string) error {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 	intervalRaw := fs.String("interval", "10s", "Polling interval")
 	threadFilter := fs.String("thread", "", "Filter by thread ID")
-	_ = fs.String("tag", "", "Tag filter (reserved)")
+	tagFilter := fs.String("tag", "", "Filter by tag")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -620,6 +620,8 @@ func cmdWatch(args []string) error {
 		return err
 	}
 	seen := map[string]struct{}{}
+	threadTagMatchCache := map[string]bool{}
+	tag := strings.TrimSpace(*tagFilter)
 	for {
 		var payload struct {
 			Notifications []map[string]any `json:"notifications"`
@@ -640,6 +642,15 @@ func cmdWatch(args []string) error {
 					continue
 				}
 			}
+			if tag != "" {
+				ok, err := notificationMatchesTag(cl, n, tag, threadTagMatchCache)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					continue
+				}
+			}
 			seen[id] = struct{}{}
 			if err := printJSON(n); err != nil {
 				return err
@@ -647,6 +658,44 @@ func cmdWatch(args []string) error {
 		}
 		time.Sleep(interval)
 	}
+}
+
+func notificationMatchesTag(cl *client.Client, notification map[string]any, tag string, threadTagMatchCache map[string]bool) (bool, error) {
+	threadID, _ := notification["thread_id"].(string)
+	threadID = strings.TrimSpace(threadID)
+	if threadID != "" {
+		return postHasTag(cl, threadID, tag, threadTagMatchCache)
+	}
+	contentID, _ := notification["content_id"].(string)
+	contentID = strings.TrimSpace(contentID)
+	if contentID == "" {
+		return false, nil
+	}
+	return postHasTag(cl, contentID, tag, threadTagMatchCache)
+}
+
+func postHasTag(cl *client.Client, postID, tag string, threadTagMatchCache map[string]bool) (bool, error) {
+	if matched, ok := threadTagMatchCache[postID]; ok {
+		return matched, nil
+	}
+	var post struct {
+		Tags []string `json:"tags"`
+	}
+	if err := cl.Get("/api/v1/posts/"+url.PathEscape(postID), &post); err != nil {
+		if strings.HasPrefix(err.Error(), "http 404") {
+			threadTagMatchCache[postID] = false
+			return false, nil
+		}
+		return false, err
+	}
+	for _, candidate := range post.Tags {
+		if strings.EqualFold(strings.TrimSpace(candidate), tag) {
+			threadTagMatchCache[postID] = true
+			return true, nil
+		}
+	}
+	threadTagMatchCache[postID] = false
+	return false, nil
 }
 
 func cmdSearch(args []string) error {
