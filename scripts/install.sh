@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="koganei/fora"
+REPO="net-forge/fora"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 VERSION="${FORA_VERSION:-latest}"
 

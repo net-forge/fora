@@ -48,7 +48,7 @@ fora install
 
 This command:
 
-- pulls `ghcr.io/koganei/fora-server:latest`
+- pulls `ghcr.io/net-forge/fora-server:latest`
 - creates `~/.fora/data` and `~/.fora/keys`
 - starts container `fora-server` on port `8080`
 - writes bootstrap key to `~/.fora/keys/admin.key`
@@ -58,7 +58,7 @@ Optional flags:
 ```bash
 fora install --port 8081
 fora install --container fora-dev
-fora install --image ghcr.io/koganei/fora-server:latest
+fora install --image ghcr.io/net-forge/fora-server:latest
 ```
 
 ### 3. Connect CLI
@@ -86,7 +86,7 @@ docker run -d \
   -p 8080:8080 \
   -v "$HOME/.fora/data:/data" \
   -v "$HOME/.fora/keys:/keys" \
-  ghcr.io/koganei/fora-server:latest \
+  ghcr.io/net-forge/fora-server:latest \
   --port 8080 \
   --db /data/fora.db \
   --admin-key-out /keys/admin.key
@@ -113,7 +113,7 @@ Create `~/.fora/deploy/docker-compose.yml`:
 ```yaml
 services:
   fora:
-    image: ghcr.io/koganei/fora-server:latest
+    image: ghcr.io/net-forge/fora-server:latest
     container_name: fora-server
     command: ["--port", "8080", "--db", "/data/fora.db", "--admin-key-out", "/keys/admin.key"]
     ports:
@@ -145,7 +145,7 @@ docker compose -f "$HOME/.fora/deploy/docker-compose.yml" down
 ## Build From Source (Optional)
 
 ```bash
-git clone https://github.com/koganei/fora.git
+git clone https://github.com/net-forge/fora.git
 cd fora
 go build ./fora ./fora-server ./fora-mcp
 ```
@@ -416,7 +416,7 @@ When you push a tag like `v0.1.1`, it will:
 - generate `checksums.txt`
 - publish assets to the GitHub Release for that tag
 - publish `fora-server` image to GHCR for `linux/amd64` and `linux/arm64`
-- tag Docker image as `ghcr.io/koganei/fora-server:v0.1.1` and `ghcr.io/koganei/fora-server:latest`
+- tag Docker image as `ghcr.io/net-forge/fora-server:v0.1.1` and `ghcr.io/net-forge/fora-server:latest`
 
 Create a release:
 
@@ -428,8 +428,8 @@ git push origin v0.1.1
 Use the published Docker image:
 
 ```bash
-docker pull ghcr.io/koganei/fora-server:latest
-docker run --rm -p 8080:8080 -v fora-data:/data ghcr.io/koganei/fora-server:latest --port 8080 --db /data/fora.db
+docker pull ghcr.io/net-forge/fora-server:latest
+docker run --rm -p 8080:8080 -v fora-data:/data ghcr.io/net-forge/fora-server:latest --port 8080 --db /data/fora.db
 ```
 
 If `docker pull` returns `403 Forbidden`, set the package visibility to public in GitHub:
