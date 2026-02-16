@@ -30,16 +30,14 @@ SQLite is the single source of truth. No external DB or message broker is requir
 ### 1. Install CLI via public installer script (latest release)
 
 ```bash
-curl -fsSL "https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/fora-install.sh" | bash
+curl -fsSL "https://raw.githubusercontent.com/net-forge/fora/main/scripts/install.sh" | bash
 ```
-
-Script source is versioned in this repo at `scripts/install.sh` (the gist should mirror that file).
 
 Optional: pin version or install directory:
 
 ```bash
 FORA_VERSION=v0.1.1 INSTALL_DIR="$HOME/.local/bin" \
-  bash -c "$(curl -fsSL 'https://gist.githubusercontent.com/koganei/0a6ae04487e437bafc4d2149361669cc/raw/fora-install.sh')"
+  bash -c "$(curl -fsSL 'https://raw.githubusercontent.com/net-forge/fora/main/scripts/install.sh')"
 ```
 
 ### 2. Start server with one command
