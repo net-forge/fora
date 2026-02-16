@@ -284,13 +284,9 @@ func cmdChannels(args []string) error {
 		return printJSON(resp)
 	}
 	if args[0] == "add" {
-		fs := flag.NewFlagSet("channels add", flag.ContinueOnError)
-		description := fs.String("description", "", "Description")
-		if err := fs.Parse(args[1:]); err != nil {
+		name, description, err := parseChannelsAddArgs(args[1:])
+		if err != nil {
 			return err
-		}
-		if fs.NArg() != 1 {
-			return errors.New("usage: fora channels add <name> [--description text]")
 		}
 		cl, err := defaultClient()
 		if err != nil {
@@ -298,14 +294,44 @@ func cmdChannels(args []string) error {
 		}
 		var resp map[string]any
 		if err := cl.Post("/api/v1/channels", map[string]any{
-			"name":        fs.Arg(0),
-			"description": strings.TrimSpace(*description),
+			"name":        name,
+			"description": description,
 		}, &resp); err != nil {
 			return err
 		}
 		return printJSON(resp)
 	}
 	return errors.New("usage: fora channels <list|add>")
+}
+
+func parseChannelsAddArgs(args []string) (string, string, error) {
+	const usage = "usage: fora channels add <name> [--description text]"
+	name := ""
+	description := ""
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		switch {
+		case strings.HasPrefix(arg, "--description="):
+			description = strings.TrimSpace(strings.TrimPrefix(arg, "--description="))
+		case arg == "--description":
+			if i+1 >= len(args) {
+				return "", "", errors.New(usage)
+			}
+			i++
+			description = strings.TrimSpace(args[i])
+		case strings.HasPrefix(arg, "-"):
+			return "", "", errors.New(usage)
+		default:
+			if name != "" {
+				return "", "", errors.New(usage)
+			}
+			name = arg
+		}
+	}
+	if name == "" {
+		return "", "", errors.New(usage)
+	}
+	return name, description, nil
 }
 
 func cmdPosts(args []string) error {
