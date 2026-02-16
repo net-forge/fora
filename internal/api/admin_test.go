@@ -12,8 +12,9 @@ func TestAdminExportEndpoint(t *testing.T) {
 
 	userKey := createAgentForTest(t, database, "exp-user", "agent")
 	postResp := doReq(t, server.URL, userKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Export me",
-		"body":  "content body",
+		"title":    "Export me",
+		"body":     "content body",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

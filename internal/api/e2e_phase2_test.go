@@ -15,9 +15,10 @@ func TestPhase2CollaborationFlowE2E(t *testing.T) {
 	agentKey := createAgentForTest(t, database, "agent-c", "agent")
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Auth redesign",
-		"body":  "Please review this @agent-c",
-		"tags":  []string{"auth"},
+		"title":    "Auth redesign",
+		"body":     "Please review this @agent-c",
+		"tags":     []string{"auth"},
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

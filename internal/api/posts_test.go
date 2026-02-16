@@ -24,9 +24,10 @@ func TestPostsAndRepliesLifecycle(t *testing.T) {
 	defer database.Close()
 
 	postResp := doReq(t, server.URL, apiKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "First Thread",
-		"body":  "Root body",
-		"tags":  []string{"mvp", "test"},
+		"title":    "First Thread",
+		"body":     "Root body",
+		"tags":     []string{"mvp", "test"},
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -122,8 +123,9 @@ func TestPostEditAuthorization(t *testing.T) {
 	_ = adminKey
 
 	postResp := doReq(t, server.URL, userKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Mine",
-		"body":  "Owner content",
+		"title":    "Mine",
+		"body":     "Owner content",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -149,8 +151,9 @@ func TestReplyEditAndDeleteLifecycle(t *testing.T) {
 	_ = adminKey
 
 	postResp := doReq(t, server.URL, authorKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Reply lifecycle",
-		"body":  "Root",
+		"title":    "Reply lifecycle",
+		"body":     "Root",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -218,8 +221,9 @@ func TestReplyEditDeleteAuthorization(t *testing.T) {
 	otherKey := createAgentForTest(t, database, "reply-other", "agent")
 
 	postResp := doReq(t, server.URL, ownerKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Authorization",
-		"body":  "Root",
+		"title":    "Authorization",
+		"body":     "Root",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -271,9 +275,10 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 	writerKey := createAgentForTest(t, database, "writer2", "agent")
 
 	p1Resp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Ops Thread",
-		"body":  "Discussion A",
-		"tags":  []string{"ops", "urgent"},
+		"title":    "Ops Thread",
+		"body":     "Discussion A",
+		"tags":     []string{"ops", "urgent"},
+		"board_id": "general",
 	})
 	if p1Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p1 status = %d", p1Resp.StatusCode)
@@ -281,9 +286,10 @@ func TestPostListFilteringAndSorting(t *testing.T) {
 	p1 := decodeContent(t, p1Resp)
 
 	p2Resp := doReq(t, server.URL, writerKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Dev Thread",
-		"body":  "Discussion B",
-		"tags":  []string{"dev", "urgent"},
+		"title":    "Dev Thread",
+		"body":     "Discussion B",
+		"tags":     []string{"dev", "urgent"},
+		"board_id": "general",
 	})
 	if p2Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p2 status = %d", p2Resp.StatusCode)
@@ -396,8 +402,9 @@ func TestThreadEndpointReturnsNestedTree(t *testing.T) {
 	userKey := createAgentForTest(t, database, "threader", "agent")
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Tree Root",
-		"body":  "Root",
+		"title":    "Tree Root",
+		"body":     "Root",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -500,9 +507,10 @@ func TestPostTagUpdateEndpoint(t *testing.T) {
 	defer database.Close()
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Taggable",
-		"body":  "Body",
-		"tags":  []string{"alpha"},
+		"title":    "Taggable",
+		"body":     "Body",
+		"tags":     []string{"alpha"},
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -548,8 +556,9 @@ func TestPostListTotalIndependentOfPageSize(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-			"title": "Page test",
-			"body":  "Body " + strconv.Itoa(i),
+			"title":    "Page test",
+			"body":     "Body " + strconv.Itoa(i),
+			"board_id": "general",
 		})
 		if postResp.StatusCode != http.StatusCreated {
 			t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -588,8 +597,9 @@ func TestPostStatusTransitionsAndPermissions(t *testing.T) {
 	otherKey := createAgentForTest(t, database, "other-status", "agent")
 
 	postResp := doReq(t, server.URL, ownerKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Status",
-		"body":  "Body",
+		"title":    "Status",
+		"body":     "Body",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -635,8 +645,9 @@ func TestPostEditHistory(t *testing.T) {
 	defer database.Close()
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "History",
-		"body":  "v1",
+		"title":    "History",
+		"body":     "v1",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

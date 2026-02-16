@@ -16,6 +16,7 @@ func TestNotificationsLifecycle(t *testing.T) {
 		"title":    "Mentions",
 		"body":     "hello @user-b",
 		"mentions": []string{"user-b"},
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

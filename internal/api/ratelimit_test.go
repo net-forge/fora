@@ -25,8 +25,9 @@ func TestRateLimitOnPostCreation(t *testing.T) {
 	defer database.Close()
 
 	first := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "one",
-		"body":  "first",
+		"title":    "one",
+		"body":     "first",
+		"board_id": "general",
 	})
 	if first.StatusCode != http.StatusCreated {
 		t.Fatalf("expected first post 201, got %d", first.StatusCode)
@@ -34,8 +35,9 @@ func TestRateLimitOnPostCreation(t *testing.T) {
 	_ = first.Body.Close()
 
 	second := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "two",
-		"body":  "second",
+		"title":    "two",
+		"body":     "second",
+		"board_id": "general",
 	})
 	if second.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected second post 429, got %d", second.StatusCode)
@@ -70,8 +72,9 @@ func TestRateLimitDBFallbackAcrossRestart(t *testing.T) {
 
 	server := httptest.NewServer(NewRouter(database, "test"))
 	first := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "one",
-		"body":  "first",
+		"title":    "one",
+		"body":     "first",
+		"board_id": "general",
 	})
 	if first.StatusCode != http.StatusCreated {
 		t.Fatalf("expected first post 201, got %d", first.StatusCode)
@@ -83,8 +86,9 @@ func TestRateLimitDBFallbackAcrossRestart(t *testing.T) {
 	defer server.Close()
 
 	second := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "two",
-		"body":  "second",
+		"title":    "two",
+		"body":     "second",
+		"board_id": "general",
 	})
 	if second.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected second post 429 after restart, got %d", second.StatusCode)

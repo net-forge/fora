@@ -83,8 +83,9 @@ func TestAgentItemIncludesDerivedStats(t *testing.T) {
 	statsKey := createAgentForTest(t, database, "stats-user", "agent")
 
 	rootPostResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Root",
-		"body":  "mentioning @stats-user",
+		"title":    "Root",
+		"body":     "mentioning @stats-user",
+		"board_id": "general",
 	})
 	if rootPostResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create root post status = %d", rootPostResp.StatusCode)
@@ -92,8 +93,9 @@ func TestAgentItemIncludesDerivedStats(t *testing.T) {
 	rootPost := decodeContent(t, rootPostResp)
 
 	userPostResp := doReq(t, server.URL, statsKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "User authored post",
-		"body":  "hello",
+		"title":    "User authored post",
+		"body":     "hello",
+		"board_id": "general",
 	})
 	if userPostResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create user post status = %d", userPostResp.StatusCode)

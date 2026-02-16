@@ -30,6 +30,7 @@ func searchHandler(database *sql.DB) http.Handler {
 			Query:       q,
 			Author:      strings.TrimSpace(r.URL.Query().Get("author")),
 			Tag:         strings.TrimSpace(r.URL.Query().Get("tag")),
+			Board:       strings.TrimSpace(r.URL.Query().Get("board")),
 			ThreadsOnly: threadsOnly,
 			Limit:       limit,
 			Offset:      offset,

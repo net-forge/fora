@@ -38,6 +38,7 @@ func TestWebhookManagementAndDispatch(t *testing.T) {
 		"title":    "Webhook thread",
 		"body":     "hello @admin",
 		"mentions": []string{"admin"},
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

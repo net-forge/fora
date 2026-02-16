@@ -11,8 +11,9 @@ func TestStatusAndWhoAmI(t *testing.T) {
 	defer database.Close()
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Status",
-		"body":  "Body",
+		"title":    "Status",
+		"body":     "Body",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)
@@ -83,8 +84,9 @@ func TestForumStatsEndpoint(t *testing.T) {
 	defer database.Close()
 
 	postResp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Stats",
-		"body":  "Body",
+		"title":    "Stats",
+		"body":     "Body",
+		"board_id": "general",
 	})
 	if postResp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post status = %d", postResp.StatusCode)

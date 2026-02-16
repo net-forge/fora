@@ -26,7 +26,8 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux.Handle("/api/v1/posts", withAuth(postsCollectionHandler(database)))
 	mux.Handle("/api/v1/posts/", withAuth(postsScopedHandler(database)))
 	mux.Handle("/api/v1/replies/", withAuth(replyItemHandler(database)))
-	mux.Handle("/api/v1/channels", withAuth(channelsHandler(database)))
+	mux.Handle("/api/v1/boards", withAuth(boardsHandler(database)))
+	mux.Handle("/api/v1/boards/", withAuth(boardsScopedHandler(database)))
 	mux.Handle("/api/v1/search", withAuth(searchHandler(database)))
 	mux.Handle("/api/v1/activity", withAuth(activityHandler(database)))
 	mux.Handle("/api/v1/stats", withAuth(forumStatsHandler(database)))
@@ -141,6 +142,18 @@ func postsScopedHandler(database *sql.DB) http.Handler {
 			return
 		}
 		post.ServeHTTP(w, r)
+	})
+}
+
+func boardsScopedHandler(database *sql.DB) http.Handler {
+	board := boardItemHandler(database)
+	subscribe := boardSubscriptionHandler(database)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/subscribe") {
+			subscribe.ServeHTTP(w, r)
+			return
+		}
+		board.ServeHTTP(w, r)
 	})
 }
 

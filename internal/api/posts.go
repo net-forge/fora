@@ -15,11 +15,11 @@ import (
 )
 
 type createPostRequest struct {
-	Title     *string  `json:"title"`
-	Body      string   `json:"body"`
-	Tags      []string `json:"tags"`
-	Mentions  []string `json:"mentions"`
-	ChannelID *string  `json:"channel_id"`
+	Title    *string  `json:"title"`
+	Body     string   `json:"body"`
+	Tags     []string `json:"tags"`
+	Mentions []string `json:"mentions"`
+	BoardID  string   `json:"board_id"`
 }
 
 type updatePostRequest struct {
@@ -59,20 +59,23 @@ func postsCollectionHandler(database *sql.DB) http.Handler {
 				writeError(w, http.StatusBadRequest, "invalid json payload")
 				return
 			}
-			if req.ChannelID != nil && strings.TrimSpace(*req.ChannelID) != "" {
-				ok, err := db.ChannelExists(r.Context(), database, strings.TrimSpace(*req.ChannelID))
-				if err != nil {
-					writeError(w, http.StatusInternalServerError, "failed to validate channel")
-					return
-				}
-				if !ok {
-					writeError(w, http.StatusBadRequest, "unknown channel_id")
-					return
-				}
+			req.BoardID = strings.TrimSpace(req.BoardID)
+			if req.BoardID == "" {
+				writeError(w, http.StatusBadRequest, "board_id is required")
+				return
 			}
-			post, err := db.CreatePost(r.Context(), database, agent.Name, req.Title, req.Body, req.Tags, req.Mentions, req.ChannelID)
+			ok, err := db.BoardExists(r.Context(), database, req.BoardID)
 			if err != nil {
-				if strings.Contains(err.Error(), "body is required") {
+				writeError(w, http.StatusInternalServerError, "failed to validate board")
+				return
+			}
+			if !ok {
+				writeError(w, http.StatusBadRequest, "unknown board_id")
+				return
+			}
+			post, err := db.CreatePost(r.Context(), database, agent.Name, req.Title, req.Body, req.Tags, req.Mentions, req.BoardID)
+			if err != nil {
+				if strings.Contains(err.Error(), "body is required") || strings.Contains(err.Error(), "board_id is required") {
 					writeError(w, http.StatusBadRequest, err.Error())
 					return
 				}
@@ -83,6 +86,7 @@ func postsCollectionHandler(database *sql.DB) http.Handler {
 				"id":        post.ID,
 				"author":    post.Author,
 				"thread_id": post.ThreadID,
+				"board_id":  post.BoardID,
 			})
 			if len(req.Mentions) > 0 {
 				emitWebhookEvent(database, "mention.created", map[string]any{
@@ -90,6 +94,7 @@ func postsCollectionHandler(database *sql.DB) http.Handler {
 					"thread_id":  post.ThreadID,
 					"from":       post.Author,
 					"mentions":   req.Mentions,
+					"board_id":   post.BoardID,
 				})
 			}
 			writeJSON(w, http.StatusCreated, post)
@@ -727,14 +732,14 @@ func parseListPostsParams(r *http.Request) (db.ListPostsParams, error) {
 	limit, offset := parseLimitOffset(r)
 	q := r.URL.Query()
 	params := db.ListPostsParams{
-		Limit:   limit,
-		Offset:  offset,
-		Author:  strings.TrimSpace(q.Get("author")),
-		Tags:    normalizedTagFilters(q["tag"]),
-		Channel: strings.TrimSpace(q.Get("channel")),
-		Status:  strings.TrimSpace(q.Get("status")),
-		Sort:    strings.TrimSpace(q.Get("sort")),
-		Order:   strings.TrimSpace(q.Get("order")),
+		Limit:  limit,
+		Offset: offset,
+		Author: strings.TrimSpace(q.Get("author")),
+		Tags:   normalizedTagFilters(q["tag"]),
+		Board:  strings.TrimSpace(q.Get("board")),
+		Status: strings.TrimSpace(q.Get("status")),
+		Sort:   strings.TrimSpace(q.Get("sort")),
+		Order:  strings.TrimSpace(q.Get("order")),
 	}
 	if params.Status != "" {
 		switch params.Status {

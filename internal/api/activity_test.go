@@ -13,8 +13,9 @@ func TestActivityEndpointListsRecentPostAndReplyEvents(t *testing.T) {
 	userKey := createAgentForTest(t, database, "activity-user", "agent")
 
 	post1Resp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "First",
-		"body":  "First post",
+		"title":    "First",
+		"body":     "First post",
+		"board_id": "general",
 	})
 	if post1Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post1 status = %d", post1Resp.StatusCode)
@@ -30,8 +31,9 @@ func TestActivityEndpointListsRecentPostAndReplyEvents(t *testing.T) {
 	reply := decodeContent(t, replyResp)
 
 	post2Resp := doReq(t, server.URL, userKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Second",
-		"body":  "Second post",
+		"title":    "Second",
+		"body":     "Second post",
+		"board_id": "general",
 	})
 	if post2Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create post2 status = %d", post2Resp.StatusCode)

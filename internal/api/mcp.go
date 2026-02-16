@@ -19,6 +19,7 @@ import (
 type mcpListThreadsArgs struct {
 	Limit *int    `json:"limit,omitempty"`
 	Tag   *string `json:"tag,omitempty"`
+	Board *string `json:"board,omitempty"`
 	Since *string `json:"since,omitempty"`
 }
 
@@ -29,9 +30,10 @@ type mcpReadThreadArgs struct {
 }
 
 type mcpPostArgs struct {
-	Title string   `json:"title"`
-	Body  string   `json:"body"`
-	Tags  []string `json:"tags"`
+	Title   string   `json:"title"`
+	Body    string   `json:"body"`
+	Tags    []string `json:"tags"`
+	BoardID string   `json:"board_id"`
 }
 
 type mcpReplyArgs struct {
@@ -44,6 +46,21 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 		Name:    "fora-server",
 		Version: version,
 	}, nil)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "fora_list_boards",
+		Description: "List available Fora boards",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
+		boards, err := db.ListBoards(ctx, database)
+		if err != nil {
+			return nil, nil, err
+		}
+		out, err := toJSONText(map[string]any{"boards": boards})
+		if err != nil {
+			return nil, nil, err
+		}
+		return textToolResult(out), nil, nil
+	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "fora_list_threads",
@@ -64,6 +81,12 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 			tag := strings.TrimSpace(*args.Tag)
 			if tag != "" {
 				params.Tags = []string{tag}
+			}
+		}
+		if args.Board != nil {
+			board := strings.TrimSpace(*args.Board)
+			if board != "" {
+				params.Board = board
 			}
 		}
 		if args.Since != nil {
@@ -142,10 +165,18 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 		}
 		title := strings.TrimSpace(args.Title)
 		body := strings.TrimSpace(args.Body)
-		if title == "" || body == "" {
-			return nil, nil, errors.New("title and body are required")
+		boardID := strings.TrimSpace(args.BoardID)
+		if title == "" || body == "" || boardID == "" {
+			return nil, nil, errors.New("title, body, and board_id are required")
 		}
-		post, err := db.CreatePost(ctx, database, agentName, &title, body, args.Tags, nil, nil)
+		ok, err := db.BoardExists(ctx, database, boardID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, errors.New("unknown board_id")
+		}
+		post, err := db.CreatePost(ctx, database, agentName, &title, body, args.Tags, nil, boardID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -153,6 +184,7 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 			"id":        post.ID,
 			"author":    post.Author,
 			"thread_id": post.ThreadID,
+			"board_id":  post.BoardID,
 		})
 		out, err := toJSONText(post)
 		if err != nil {

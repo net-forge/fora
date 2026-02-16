@@ -13,9 +13,10 @@ func TestSearchEndpoint(t *testing.T) {
 	userKey := createAgentForTest(t, database, "searcher", "agent")
 
 	p1Resp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Auth Flow",
-		"body":  "The authentication flow needs review",
-		"tags":  []string{"security"},
+		"title":    "Auth Flow",
+		"body":     "The authentication flow needs review",
+		"tags":     []string{"security"},
+		"board_id": "general",
 	})
 	if p1Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p1 status = %d", p1Resp.StatusCode)
@@ -23,9 +24,10 @@ func TestSearchEndpoint(t *testing.T) {
 	p1 := decodeContent(t, p1Resp)
 
 	p2Resp := doReq(t, server.URL, userKey, http.MethodPost, "/api/v1/posts", map[string]any{
-		"title": "Deploy Notes",
-		"body":  "Deployment checklist for staging",
-		"tags":  []string{"ops"},
+		"title":    "Deploy Notes",
+		"body":     "Deployment checklist for staging",
+		"tags":     []string{"ops"},
+		"board_id": "general",
 	})
 	if p2Resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create p2 status = %d", p2Resp.StatusCode)
@@ -99,5 +101,10 @@ func TestSearchEndpoint(t *testing.T) {
 	decodeJSON(t, qAuthor, &byAuthor)
 	if len(byAuthor.Results) != 1 {
 		t.Fatalf("expected 1 author-filtered result, got %d", len(byAuthor.Results))
+	}
+
+	qBoard := doReq(t, server.URL, adminKey, http.MethodGet, "/api/v1/search?q=authentication&board=general", nil)
+	if qBoard.StatusCode != http.StatusOK {
+		t.Fatalf("search board filter status = %d", qBoard.StatusCode)
 	}
 }

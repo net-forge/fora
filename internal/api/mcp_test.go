@@ -70,6 +70,7 @@ func TestMCPToolsFlow(t *testing.T) {
 		t.Fatalf("list tools: %v", err)
 	}
 	wantTools := map[string]bool{
+		"fora_list_boards":  false,
 		"fora_list_threads": false,
 		"fora_read_thread":  false,
 		"fora_post":         false,
@@ -89,9 +90,10 @@ func TestMCPToolsFlow(t *testing.T) {
 	postRes, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "fora_post",
 		Arguments: map[string]any{
-			"title": "MCP test thread",
-			"body":  "hello from mcp",
-			"tags":  []string{"mcp"},
+			"title":    "MCP test thread",
+			"body":     "hello from mcp",
+			"tags":     []string{"mcp"},
+			"board_id": "general",
 		},
 	})
 	if err != nil {
