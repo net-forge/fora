@@ -171,21 +171,14 @@ func syncAdminKey(containerName, keyPath string) error {
 func cmdConnect(args []string) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
 	apiKey := fs.String("api-key", "", "API key")
-	var rawURL string
-	parseArgs := args
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		rawURL = strings.TrimSpace(args[0])
-		parseArgs = args[1:]
-	}
-	if err := fs.Parse(parseArgs); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if rawURL == "" {
-		if fs.NArg() != 1 {
-			return errors.New("usage: fora connect <url> --api-key <key>")
-		}
-		rawURL = strings.TrimSpace(fs.Arg(0))
+	if len(positionals) != 1 {
+		return errors.New("usage: fora connect <url> --api-key <key>")
 	}
+	rawURL := strings.TrimSpace(positionals[0])
 	if strings.TrimSpace(*apiKey) == "" {
 		return errors.New("missing --api-key")
 	}
@@ -374,10 +367,11 @@ func cmdPostsAdd(args []string) error {
 	channel := fs.String("channel", "", "Channel ID")
 	var mentions multiStringFlag
 	fs.Var(&mentions, "mention", "Mention agent (repeat or comma-separated)")
-	if err := fs.Parse(args); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	body, err := resolveBodyInput(fs.Args(), *fromFile)
+	body, err := resolveBodyInput(positionals, *fromFile)
 	if err != nil {
 		return err
 	}
@@ -486,22 +480,14 @@ func cmdPostsThread(args []string) error {
 	depth := fs.Int("depth", 0, "Max reply depth (0 = unlimited)")
 	since := fs.String("since", "", "Filter replies by date/duration")
 	flat := fs.Bool("flat", false, "Request flat view when supported by server")
-
-	var postID string
-	parseArgs := args
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		postID = strings.TrimSpace(args[0])
-		parseArgs = args[1:]
-	}
-	if err := fs.Parse(parseArgs); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if postID == "" {
-		if fs.NArg() != 1 {
-			return errors.New("usage: fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
-		}
-		postID = strings.TrimSpace(fs.Arg(0))
+	if len(positionals) != 1 {
+		return errors.New("usage: fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
 	}
+	postID := strings.TrimSpace(positionals[0])
 	if postID == "" {
 		return errors.New("usage: fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
 	}
@@ -552,14 +538,15 @@ func cmdPostsReply(args []string) error {
 	fromFile := fs.String("from-file", "", "Read body from file")
 	var mentions multiStringFlag
 	fs.Var(&mentions, "mention", "Mention agent (repeat or comma-separated)")
-	if err := fs.Parse(args); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() < 1 || fs.NArg() > 2 {
+	if len(positionals) < 1 || len(positionals) > 2 {
 		return errors.New("usage: fora posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]")
 	}
-	parentID := fs.Arg(0)
-	body, err := resolveBodyInput(fs.Args()[1:], *fromFile)
+	parentID := positionals[0]
+	body, err := resolveBodyInput(positionals[1:], *fromFile)
 	if err != nil {
 		return err
 	}
@@ -581,25 +568,15 @@ func cmdPostsReply(args []string) error {
 func cmdPostsEdit(args []string) error {
 	fs := flag.NewFlagSet("posts edit", flag.ContinueOnError)
 	fromFile := fs.String("from-file", "", "Read body from file")
-
-	var postID string
-	parseArgs := args
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		postID = strings.TrimSpace(args[0])
-		parseArgs = args[1:]
-	}
-	if err := fs.Parse(parseArgs); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-
-	contentArgs := fs.Args()
-	if postID == "" {
-		if fs.NArg() < 1 || fs.NArg() > 2 {
-			return errors.New("usage: fora posts edit <post-id> [content] [--from-file file]")
-		}
-		postID = strings.TrimSpace(fs.Arg(0))
-		contentArgs = fs.Args()[1:]
+	if len(positionals) < 1 || len(positionals) > 2 {
+		return errors.New("usage: fora posts edit <post-id> [content] [--from-file file]")
 	}
+	postID := strings.TrimSpace(positionals[0])
+	contentArgs := positionals[1:]
 	if postID == "" || len(contentArgs) > 1 {
 		return errors.New("usage: fora posts edit <post-id> [content] [--from-file file]")
 	}
@@ -633,13 +610,14 @@ func cmdPostsTag(args []string) error {
 	fs := flag.NewFlagSet("posts tag", flag.ContinueOnError)
 	add := fs.String("add", "", "Comma-separated tags to add")
 	remove := fs.String("remove", "", "Comma-separated tags to remove")
-	if err := fs.Parse(args); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if len(positionals) != 1 {
 		return errors.New("usage: fora posts tag <post-id> --add a,b --remove c")
 	}
-	postID := fs.Arg(0)
+	postID := positionals[0]
 	cl, err := defaultClient()
 	if err != nil {
 		return err
@@ -844,17 +822,18 @@ func cmdSearch(args []string) error {
 	offset := fs.Int("offset", 0, "Offset")
 	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
 	quiet := fs.Bool("quiet", false, "IDs only")
-	if err := fs.Parse(args); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if len(positionals) != 1 {
 		return errors.New("usage: fora search <query> [--author x] [--tag x] [--since t] [--threads-only]")
 	}
 	cl, err := defaultClient()
 	if err != nil {
 		return err
 	}
-	path := "/api/v1/search?q=" + url.QueryEscape(fs.Arg(0)) +
+	path := "/api/v1/search?q=" + url.QueryEscape(positionals[0]) +
 		"&limit=" + strconv.Itoa(*limit) + "&offset=" + strconv.Itoa(*offset)
 	if strings.TrimSpace(*author) != "" {
 		path += "&author=" + url.QueryEscape(strings.TrimSpace(*author))
@@ -1026,10 +1005,11 @@ func cmdAgentInfo(args []string) error {
 	fs := flag.NewFlagSet("agent info", flag.ContinueOnError)
 	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
 	quiet := fs.Bool("quiet", false, "IDs only")
-	if err := fs.Parse(args); err != nil {
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if len(positionals) != 1 {
 		return errors.New("usage: fora agent info <name> [--format f] [--quiet]")
 	}
 	cl, err := defaultClient()
@@ -1037,7 +1017,7 @@ func cmdAgentInfo(args []string) error {
 		return err
 	}
 	var resp map[string]any
-	if err := cl.Get("/api/v1/agents/"+url.PathEscape(fs.Arg(0)), &resp); err != nil {
+	if err := cl.Get("/api/v1/agents/"+url.PathEscape(positionals[0]), &resp); err != nil {
 		return err
 	}
 	return output.Print(resp, *format, *quiet)
@@ -1222,6 +1202,64 @@ func parseTags(raw string) []string {
 
 func parseMentions(raw []string) []string {
 	return parseCSVUnique(raw)
+}
+
+func parseInterspersedFlags(fs *flag.FlagSet, args []string) ([]string, error) {
+	positionals := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		if arg == "" {
+			continue
+		}
+		if arg == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			positionals = append(positionals, arg)
+			continue
+		}
+
+		trimmed := strings.TrimLeft(arg, "-")
+		if trimmed == "" {
+			positionals = append(positionals, arg)
+			continue
+		}
+		name := trimmed
+		value := ""
+		hasValue := false
+		if idx := strings.Index(trimmed, "="); idx >= 0 {
+			name = trimmed[:idx]
+			value = trimmed[idx+1:]
+			hasValue = true
+		}
+
+		f := fs.Lookup(name)
+		if f == nil {
+			return nil, fmt.Errorf("flag provided but not defined: -%s", name)
+		}
+		isBool := false
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+			isBool = true
+		}
+
+		if !hasValue {
+			if isBool {
+				value = "true"
+			} else {
+				if i+1 >= len(args) {
+					return nil, fmt.Errorf("flag needs an argument: -%s", name)
+				}
+				i++
+				value = args[i]
+			}
+		}
+
+		if err := fs.Set(name, value); err != nil {
+			return nil, err
+		}
+	}
+	return positionals, nil
 }
 
 func printJSON(v any) error {
