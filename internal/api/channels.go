@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 type createChannelRequest struct {

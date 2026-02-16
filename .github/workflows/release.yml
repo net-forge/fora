@@ -58,18 +58,18 @@ jobs:
             EXE=".exe"
           fi
 
-          STAGE_DIR="dist/stage/hive_${VERSION}_${GOOS}_${GOARCH}"
+          STAGE_DIR="dist/stage/fora_${VERSION}_${GOOS}_${GOARCH}"
           mkdir -p "$STAGE_DIR"
 
-          go build -trimpath -o "$STAGE_DIR/hive${EXE}" ./hive
-          go build -trimpath -o "$STAGE_DIR/hive-server${EXE}" ./hive-server
-          go build -trimpath -o "$STAGE_DIR/hive-mcp${EXE}" ./hive-mcp
+          go build -trimpath -o "$STAGE_DIR/fora${EXE}" ./fora
+          go build -trimpath -o "$STAGE_DIR/fora-server${EXE}" ./fora-server
+          go build -trimpath -o "$STAGE_DIR/fora-mcp${EXE}" ./fora-mcp
 
           mkdir -p dist/release
           if [ "$GOOS" = "windows" ]; then
-            (cd dist/stage && zip -rq "../release/hive_${VERSION}_${GOOS}_${GOARCH}.zip" "hive_${VERSION}_${GOOS}_${GOARCH}")
+            (cd dist/stage && zip -rq "../release/fora_${VERSION}_${GOOS}_${GOARCH}.zip" "fora_${VERSION}_${GOOS}_${GOARCH}")
           else
-            tar -C dist/stage -czf "dist/release/hive_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "hive_${VERSION}_${GOOS}_${GOARCH}"
+            tar -C dist/stage -czf "dist/release/fora_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "fora_${VERSION}_${GOOS}_${GOARCH}"
           fi
 
       - name: Upload build artifacts

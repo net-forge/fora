@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 func forumStatsHandler(database *sql.DB) http.Handler {

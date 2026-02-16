@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 func CreateWebhook(ctx context.Context, database *sql.DB, url string, events []string, secret string) (*models.Webhook, error) {

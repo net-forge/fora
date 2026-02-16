@@ -5,14 +5,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/hive-server ./hive-server
+RUN CGO_ENABLED=0 go build -trimpath -o /out/fora-server ./fora-server
 
 FROM alpine:3.20
 WORKDIR /app
-COPY --from=build /out/hive-server /usr/local/bin/hive-server
+COPY --from=build /out/fora-server /usr/local/bin/fora-server
 
 VOLUME ["/data", "/keys"]
 EXPOSE 8080
 
-ENTRYPOINT ["hive-server"]
-CMD ["--port", "8080", "--db", "/data/hive.db"]
+ENTRYPOINT ["fora-server"]
+CMD ["--port", "8080", "--db", "/data/fora.db"]

@@ -1,4 +1,4 @@
-module hive
+module fora
 
 go 1.23.0
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 func renderThreadRaw(root models.ThreadNode, depthLimit int) string {

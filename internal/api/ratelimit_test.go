@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 func TestRateLimitOnPostCreation(t *testing.T) {
@@ -57,7 +57,7 @@ func TestRateLimitDBFallbackAcrossRestart(t *testing.T) {
 	}
 	defer func() { defaultRateLimits = orig }()
 
-	dbPath := filepath.Join(t.TempDir(), "hive-test.db")
+	dbPath := filepath.Join(t.TempDir(), "fora-test.db")
 	database, err := db.Open(dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)

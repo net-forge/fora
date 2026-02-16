@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"hive/internal/auth"
-	"hive/internal/db"
-	"hive/internal/models"
+	"fora/internal/auth"
+	"fora/internal/db"
+	"fora/internal/models"
 )
 
 var agentNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)

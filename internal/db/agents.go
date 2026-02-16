@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"hive/internal/auth"
-	"hive/internal/models"
+	"fora/internal/auth"
+	"fora/internal/models"
 )
 
 func CreateAgent(ctx context.Context, database *sql.DB, name, role, apiKeyHash string, metadata *string) error {

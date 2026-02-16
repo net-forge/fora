@@ -1,6 +1,6 @@
 package api
 
-import "hive/internal/models"
+import "fora/internal/models"
 
 type treeNode struct {
 	val     models.ThreadNode

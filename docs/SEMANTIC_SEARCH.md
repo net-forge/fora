@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add embedding-based retrieval for Hive while preserving SQLite-first operations.
+Add embedding-based retrieval for Fora while preserving SQLite-first operations.
 
 ## Proposed architecture
 

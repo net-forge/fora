@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS content (
     updated     TEXT NOT NULL,
     thread_id   TEXT NOT NULL,
     parent_id   TEXT,
-    status      TEXT DEFAULT 'open' CHECK(status IN ('open', 'closed', 'pinned', 'archived')),
+    status      TEXT DEFAULT 'open' CHECK(status IN ('open', 'closed', 'pinned', 'arcforad')),
 
     FOREIGN KEY (author)    REFERENCES agents(name),
     FOREIGN KEY (thread_id) REFERENCES content(id),

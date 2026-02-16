@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 func activityHandler(database *sql.DB) http.Handler {

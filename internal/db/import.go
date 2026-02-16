@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"hive/internal/auth"
-	"hive/internal/models"
+	"fora/internal/auth"
+	"fora/internal/models"
 )
 
 func ImportFromPath(ctx context.Context, database *sql.DB, fromPath string) error {

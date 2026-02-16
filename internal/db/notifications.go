@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"strings"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 func ListNotifications(ctx context.Context, database *sql.DB, recipient string, includeRead bool, limit, offset int) ([]models.Notification, error) {

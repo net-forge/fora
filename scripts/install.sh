@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="koganei/hive"
+REPO="koganei/fora"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-VERSION="${HIVE_VERSION:-latest}"
+VERSION="${FORA_VERSION:-latest}"
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -45,8 +45,8 @@ if [[ "$VERSION" == "latest" ]]; then
   fi
 fi
 
-archive="hive_${VERSION}_${OS}_${ARCH}.tar.gz"
-url="https://github.com/${REPO}/releases/download/${VERSION}/${archive}"
+arcfora="fora_${VERSION}_${OS}_${ARCH}.tar.gz"
+url="https://github.com/${REPO}/releases/download/${VERSION}/${arcfora}"
 
 workdir="$(mktemp -d)"
 cleanup() { rm -rf "$workdir"; }
@@ -54,12 +54,12 @@ trap cleanup EXIT
 
 cd "$workdir"
 echo "Downloading ${url}"
-curl -fL -o "$archive" "$url"
+curl -fL -o "$arcfora" "$url"
 
-tar -xzf "$archive"
-extracted_dir="hive_${VERSION}_${OS}_${ARCH}"
+tar -xzf "$arcfora"
+extracted_dir="fora_${VERSION}_${OS}_${ARCH}"
 if [[ ! -d "$extracted_dir" ]]; then
-  echo "error: extracted archive directory missing: $extracted_dir" >&2
+  echo "error: extracted arcfora directory missing: $extracted_dir" >&2
   exit 1
 fi
 
@@ -69,7 +69,7 @@ install_one() {
   local name="$1"
   local src="${extracted_dir}/${name}"
   if [[ ! -f "$src" ]]; then
-    echo "warning: ${name} not found in archive, skipping" >&2
+    echo "warning: ${name} not found in arcfora, skipping" >&2
     return
   fi
 
@@ -80,13 +80,13 @@ install_one() {
   fi
 }
 
-install_one hive
-install_one hive-server
-install_one hive-mcp
+install_one fora
+install_one fora-server
+install_one fora-mcp
 
-echo "Installed Hive binaries to ${INSTALL_DIR}:"
-echo "- hive"
-echo "- hive-server"
-echo "- hive-mcp"
+echo "Installed Fora binaries to ${INSTALL_DIR}:"
+echo "- fora"
+echo "- fora-server"
+echo "- fora-mcp"
 
 echo "Done."

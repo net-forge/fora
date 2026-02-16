@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/cli/client"
-	"hive/internal/cli/config"
-	"hive/internal/cli/output"
+	"fora/internal/cli/client"
+	"fora/internal/cli/config"
+	"fora/internal/cli/output"
 )
 
 func main() {
@@ -63,14 +63,14 @@ func run(args []string) error {
 
 func cmdInstall(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
-	image := fs.String("image", "ghcr.io/koganei/hive-server:latest", "Server image")
-	container := fs.String("container", "hive-server", "Docker container name")
+	image := fs.String("image", "ghcr.io/koganei/fora-server:latest", "Server image")
+	container := fs.String("container", "fora-server", "Docker container name")
 	port := fs.String("port", "8080", "Host port")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: hive install [--image ref] [--container name] [--port n]")
+		return errors.New("usage: fora install [--image ref] [--container name] [--port n]")
 	}
 
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -81,8 +81,8 @@ func cmdInstall(args []string) error {
 	if err != nil {
 		return err
 	}
-	dataDir := filepath.Join(home, ".hive", "data")
-	keysDir := filepath.Join(home, ".hive", "keys")
+	dataDir := filepath.Join(home, ".fora", "data")
+	keysDir := filepath.Join(home, ".fora", "keys")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
@@ -116,7 +116,7 @@ func cmdInstall(args []string) error {
 		"-v", keysDir + ":/keys",
 		strings.TrimSpace(*image),
 		"--port", "8080",
-		"--db", "/data/hive.db",
+		"--db", "/data/fora.db",
 		"--admin-key-out", "/keys/admin.key",
 	}
 	runCmd := exec.Command("docker", runArgs...)
@@ -128,7 +128,7 @@ func cmdInstall(args []string) error {
 
 	keyPath := filepath.Join(keysDir, "admin.key")
 	fmt.Printf("admin key path: %s\n", keyPath)
-	fmt.Printf("connect with: hive connect http://localhost:%s --api-key \"$(cat %s)\"\n", strings.TrimSpace(*port), keyPath)
+	fmt.Printf("connect with: fora connect http://localhost:%s --api-key \"$(cat %s)\"\n", strings.TrimSpace(*port), keyPath)
 	return nil
 }
 
@@ -146,7 +146,7 @@ func cmdConnect(args []string) error {
 	}
 	if rawURL == "" {
 		if fs.NArg() != 1 {
-			return errors.New("usage: hive connect <url> --api-key <key>")
+			return errors.New("usage: fora connect <url> --api-key <key>")
 		}
 		rawURL = strings.TrimSpace(fs.Arg(0))
 	}
@@ -208,7 +208,7 @@ func cmdStatus() error {
 	}
 	srv, ok := cfg.Default()
 	if !ok {
-		return errors.New("not connected. run: hive connect <url> --api-key <key>")
+		return errors.New("not connected. run: fora connect <url> --api-key <key>")
 	}
 	cl := client.New(srv.URL, srv.APIKey)
 	var status map[string]any
@@ -254,7 +254,7 @@ func cmdChannels(args []string) error {
 			return err
 		}
 		if fs.NArg() != 1 {
-			return errors.New("usage: hive channels add <name> [--description text]")
+			return errors.New("usage: fora channels add <name> [--description text]")
 		}
 		cl, err := defaultClient()
 		if err != nil {
@@ -269,12 +269,12 @@ func cmdChannels(args []string) error {
 		}
 		return printJSON(resp)
 	}
-	return errors.New("usage: hive channels <list|add>")
+	return errors.New("usage: fora channels <list|add>")
 }
 
 func cmdPosts(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: hive posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
+		return errors.New("usage: fora posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
 	}
 	switch args[0] {
 	case "add":
@@ -300,7 +300,7 @@ func cmdPosts(args []string) error {
 	case "pin":
 		return cmdPostsStatus(args[1:], "pinned")
 	default:
-		return errors.New("usage: hive posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
+		return errors.New("usage: fora posts <add|list|latest|read|thread|reply|edit|tag|close|reopen|pin>")
 	}
 }
 
@@ -394,7 +394,7 @@ func cmdPostsList(args []string) error {
 
 func cmdPostsRead(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hive posts read <post-id>")
+		return errors.New("usage: fora posts read <post-id>")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -409,7 +409,7 @@ func cmdPostsRead(args []string) error {
 
 func cmdPostsLatest(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hive posts latest <n>")
+		return errors.New("usage: fora posts latest <n>")
 	}
 	limit, err := strconv.Atoi(strings.TrimSpace(args[0]))
 	if err != nil || limit <= 0 {
@@ -436,12 +436,12 @@ func cmdPostsThread(args []string) error {
 	}
 	if postID == "" {
 		if fs.NArg() != 1 {
-			return errors.New("usage: hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
+			return errors.New("usage: fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
 		}
 		postID = strings.TrimSpace(fs.Arg(0))
 	}
 	if postID == "" {
-		return errors.New("usage: hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
+		return errors.New("usage: fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]")
 	}
 	if *depth < 0 {
 		return errors.New("depth must be >= 0")
@@ -494,7 +494,7 @@ func cmdPostsReply(args []string) error {
 		return err
 	}
 	if fs.NArg() < 1 || fs.NArg() > 2 {
-		return errors.New("usage: hive posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]")
+		return errors.New("usage: fora posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]")
 	}
 	parentID := fs.Arg(0)
 	body, err := resolveBodyInput(fs.Args()[1:], *fromFile)
@@ -533,13 +533,13 @@ func cmdPostsEdit(args []string) error {
 	contentArgs := fs.Args()
 	if postID == "" {
 		if fs.NArg() < 1 || fs.NArg() > 2 {
-			return errors.New("usage: hive posts edit <post-id> [content] [--from-file file]")
+			return errors.New("usage: fora posts edit <post-id> [content] [--from-file file]")
 		}
 		postID = strings.TrimSpace(fs.Arg(0))
 		contentArgs = fs.Args()[1:]
 	}
 	if postID == "" || len(contentArgs) > 1 {
-		return errors.New("usage: hive posts edit <post-id> [content] [--from-file file]")
+		return errors.New("usage: fora posts edit <post-id> [content] [--from-file file]")
 	}
 	body, err := resolveBodyInput(contentArgs, *fromFile)
 	if err != nil {
@@ -575,7 +575,7 @@ func cmdPostsTag(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: hive posts tag <post-id> --add a,b --remove c")
+		return errors.New("usage: fora posts tag <post-id> --add a,b --remove c")
 	}
 	postID := fs.Arg(0)
 	cl, err := defaultClient()
@@ -594,7 +594,7 @@ func cmdPostsTag(args []string) error {
 
 func cmdPostsStatus(args []string, status string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hive posts <close|reopen|pin> <post-id>")
+		return errors.New("usage: fora posts <close|reopen|pin> <post-id>")
 	}
 	postID := args[0]
 	cl, err := defaultClient()
@@ -649,7 +649,7 @@ func cmdNotificationsList(args []string) error {
 
 func cmdNotificationsRead(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hive notifications read <notification-id>")
+		return errors.New("usage: fora notifications read <notification-id>")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -664,7 +664,7 @@ func cmdNotificationsRead(args []string) error {
 
 func cmdNotificationsClear(args []string) error {
 	if len(args) != 0 {
-		return errors.New("usage: hive notifications clear")
+		return errors.New("usage: fora notifications clear")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -786,7 +786,7 @@ func cmdSearch(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: hive search <query> [--author x] [--tag x] [--since t] [--threads-only]")
+		return errors.New("usage: fora search <query> [--author x] [--tag x] [--since t] [--threads-only]")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -852,7 +852,7 @@ func cmdAgent(args []string) error {
 	case "info":
 		return cmdAgentInfo(args[1:])
 	default:
-		return errors.New("usage: hive agent <add|list|remove|info>")
+		return errors.New("usage: fora agent <add|list|remove|info>")
 	}
 }
 
@@ -864,7 +864,7 @@ func cmdAgentAdd(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: hive agent add <name> [--role role] [--metadata text]")
+		return errors.New("usage: fora agent add <name> [--role role] [--metadata text]")
 	}
 	roleValue := strings.ToLower(strings.TrimSpace(*role))
 	if roleValue == "" {
@@ -899,7 +899,7 @@ func cmdAgentList(args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: hive agent list [--format f] [--quiet]")
+		return errors.New("usage: fora agent list [--format f] [--quiet]")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -914,7 +914,7 @@ func cmdAgentList(args []string) error {
 
 func cmdAgentRemove(args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: hive agent remove <name>")
+		return errors.New("usage: fora agent remove <name>")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -935,7 +935,7 @@ func cmdAgentInfo(args []string) error {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: hive agent info <name> [--format f] [--quiet]")
+		return errors.New("usage: fora agent info <name> [--format f] [--quiet]")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -950,7 +950,7 @@ func cmdAgentInfo(args []string) error {
 
 func cmdAdmin(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: hive admin <export|stats>")
+		return errors.New("usage: fora admin <export|stats>")
 	}
 	switch args[0] {
 	case "export":
@@ -958,7 +958,7 @@ func cmdAdmin(args []string) error {
 	case "stats":
 		return cmdAdminStats(args[1:])
 	default:
-		return errors.New("usage: hive admin <export|stats>")
+		return errors.New("usage: fora admin <export|stats>")
 	}
 }
 
@@ -1036,7 +1036,7 @@ func cmdAdminExport(args []string) error {
 
 func cmdAdminStats(args []string) error {
 	if len(args) != 0 {
-		return errors.New("usage: hive admin stats")
+		return errors.New("usage: fora admin stats")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -1081,7 +1081,7 @@ func defaultClient() (*client.Client, error) {
 	}
 	srv, ok := cfg.Default()
 	if !ok {
-		return nil, errors.New("not connected. run: hive connect <url> --api-key <key>")
+		return nil, errors.New("not connected. run: fora connect <url> --api-key <key>")
 	}
 	return client.New(srv.URL, srv.APIKey), nil
 }
@@ -1140,34 +1140,34 @@ func printJSON(v any) error {
 
 func usage() error {
 	return errors.New(`usage:
-  hive install [--image ref] [--container name] [--port n]
-  hive connect <url> --api-key <key>
-  hive disconnect
-  hive status
-  hive whoami
-  hive channels list
-  hive channels add <name> [--description text]
-  hive notifications [--all]
-  hive notifications read <notification-id>
-  hive notifications clear
-  hive watch [--interval 10s] [--thread id] [--tag tag]
-  hive search <query> [--author x] [--tag x] [--since t] [--threads-only]
-  hive activity [--limit n] [--offset n] [--author a]
-  hive agent add <name> [--role agent|admin] [--metadata text]
-  hive agent list [--format f] [--quiet]
-  hive agent info <name> [--format f] [--quiet]
-  hive agent remove <name>
-  hive admin export --format json|markdown --out <path> [--thread id] [--since t]
-  hive admin stats
-  hive posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id] [--mention a,b]
-  hive posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--channel id] [--since t] [--sort s] [--order o]
-  hive posts latest <n>
-  hive posts read <post-id>
-  hive posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]
-  hive posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]
-  hive posts edit <post-id> [content] [--from-file file]
-  hive posts tag <post-id> --add a,b --remove c
-  hive posts close <post-id>
-  hive posts reopen <post-id>
-  hive posts pin <post-id>`)
+  fora install [--image ref] [--container name] [--port n]
+  fora connect <url> --api-key <key>
+  fora disconnect
+  fora status
+  fora whoami
+  fora channels list
+  fora channels add <name> [--description text]
+  fora notifications [--all]
+  fora notifications read <notification-id>
+  fora notifications clear
+  fora watch [--interval 10s] [--thread id] [--tag tag]
+  fora search <query> [--author x] [--tag x] [--since t] [--threads-only]
+  fora activity [--limit n] [--offset n] [--author a]
+  fora agent add <name> [--role agent|admin] [--metadata text]
+  fora agent list [--format f] [--quiet]
+  fora agent info <name> [--format f] [--quiet]
+  fora agent remove <name>
+  fora admin export --format json|markdown --out <path> [--thread id] [--since t]
+  fora admin stats
+  fora posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id] [--mention a,b]
+  fora posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--channel id] [--since t] [--sort s] [--order o]
+  fora posts latest <n>
+  fora posts read <post-id>
+  fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]
+  fora posts reply <post-or-reply-id> [content] [--from-file file] [--mention a,b]
+  fora posts edit <post-id> [content] [--from-file file]
+  fora posts tag <post-id> --add a,b --remove c
+  fora posts close <post-id>
+  fora posts reopen <post-id>
+  fora posts pin <post-id>`)
 }

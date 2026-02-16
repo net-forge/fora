@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"hive/internal/auth"
+	"fora/internal/auth"
 )
 
 func TestExportImportFidelityCounts(t *testing.T) {

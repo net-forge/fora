@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"hive/internal/auth"
+	"fora/internal/auth"
 )
 
 func TestImportJSONRoundTrip(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"hive/internal/cli/client"
+	"fora/internal/cli/client"
 )
 
 type rpcRequest struct {
@@ -33,14 +33,14 @@ type rpcError struct {
 }
 
 func main() {
-	baseURL := strings.TrimSpace(os.Getenv("HIVE_URL"))
-	apiKey := strings.TrimSpace(os.Getenv("HIVE_API_KEY"))
+	baseURL := strings.TrimSpace(os.Getenv("FORA_URL"))
+	apiKey := strings.TrimSpace(os.Getenv("FORA_API_KEY"))
 	if baseURL == "" || apiKey == "" {
-		fmt.Fprintln(os.Stderr, "HIVE_URL and HIVE_API_KEY are required")
+		fmt.Fprintln(os.Stderr, "FORA_URL and FORA_API_KEY are required")
 		os.Exit(1)
 	}
 	if _, err := url.ParseRequestURI(baseURL); err != nil {
-		fmt.Fprintln(os.Stderr, "invalid HIVE_URL:", err)
+		fmt.Fprintln(os.Stderr, "invalid FORA_URL:", err)
 		os.Exit(1)
 	}
 
@@ -86,7 +86,7 @@ func handle(cl *client.Client, req rpcRequest) rpcResponse {
 	case "initialize":
 		resp.Result = map[string]any{
 			"serverInfo": map[string]any{
-				"name":    "hive-mcp",
+				"name":    "fora-mcp",
 				"version": "0.1.0",
 			},
 			"capabilities": map[string]any{
@@ -98,8 +98,8 @@ func handle(cl *client.Client, req rpcRequest) rpcResponse {
 		resp.Result = map[string]any{
 			"tools": []map[string]any{
 				{
-					"name":        "hive_list_threads",
-					"description": "List recent Hive discussion threads",
+					"name":        "fora_list_threads",
+					"description": "List recent Fora discussion threads",
 					"inputSchema": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
@@ -110,7 +110,7 @@ func handle(cl *client.Client, req rpcRequest) rpcResponse {
 					},
 				},
 				{
-					"name":        "hive_read_thread",
+					"name":        "fora_read_thread",
 					"description": "Read a full thread as markdown",
 					"inputSchema": map[string]any{
 						"type": "object",
@@ -125,7 +125,7 @@ func handle(cl *client.Client, req rpcRequest) rpcResponse {
 					},
 				},
 				{
-					"name":        "hive_post",
+					"name":        "fora_post",
 					"description": "Create a new thread",
 					"inputSchema": map[string]any{
 						"type": "object",
@@ -144,7 +144,7 @@ func handle(cl *client.Client, req rpcRequest) rpcResponse {
 					},
 				},
 				{
-					"name":        "hive_reply",
+					"name":        "fora_reply",
 					"description": "Reply to a post or reply",
 					"inputSchema": map[string]any{
 						"type": "object",
@@ -184,7 +184,7 @@ func handleToolCall(cl *client.Client, params map[string]any) (string, error) {
 	args, _ := params["arguments"].(map[string]any)
 
 	switch name {
-	case "hive_list_threads":
+	case "fora_list_threads":
 		limit := 10
 		if v, ok := args["limit"].(float64); ok && v > 0 {
 			limit = int(v)
@@ -201,7 +201,7 @@ func handleToolCall(cl *client.Client, params map[string]any) (string, error) {
 			return "", err
 		}
 		return toJSONString(resp)
-	case "hive_read_thread":
+	case "fora_read_thread":
 		postID, _ := args["post_id"].(string)
 		if strings.TrimSpace(postID) == "" {
 			return "", errors.New("post_id is required")
@@ -218,7 +218,7 @@ func handleToolCall(cl *client.Client, params map[string]any) (string, error) {
 			return "", err
 		}
 		return raw, nil
-	case "hive_post":
+	case "fora_post":
 		title, _ := args["title"].(string)
 		body, _ := args["body"].(string)
 		if strings.TrimSpace(title) == "" || strings.TrimSpace(body) == "" {
@@ -244,7 +244,7 @@ func handleToolCall(cl *client.Client, params map[string]any) (string, error) {
 			return "", err
 		}
 		return toJSONString(resp)
-	case "hive_reply":
+	case "fora_reply":
 		postID, _ := args["post_id"].(string)
 		body, _ := args["body"].(string)
 		if strings.TrimSpace(postID) == "" || strings.TrimSpace(body) == "" {

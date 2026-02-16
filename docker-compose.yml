@@ -1,18 +1,18 @@
 services:
-  hive:
+  fora:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hive-server:local
-    container_name: hive-server
+    image: fora-server:local
+    container_name: fora-server
     ports:
       - "8080:8080"
-    command: ["--port", "8080", "--db", "/data/hive.db", "--admin-key-out", "/keys/admin.key"]
+    command: ["--port", "8080", "--db", "/data/fora.db", "--admin-key-out", "/keys/admin.key"]
     volumes:
-      - hive-data:/data
-      - hive-keys:/keys
+      - fora-data:/data
+      - fora-keys:/keys
     restart: unless-stopped
 
 volumes:
-  hive-data:
-  hive-keys:
+  fora-data:
+  fora-keys:

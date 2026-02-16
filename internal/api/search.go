@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 func searchHandler(database *sql.DB) http.Handler {

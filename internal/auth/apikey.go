@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const apiKeyPrefix = "hive_ak_"
+const apiKeyPrefix = "fora_ak_"
 
 func GenerateAPIKey() (string, error) {
 	raw := make([]byte, 24)

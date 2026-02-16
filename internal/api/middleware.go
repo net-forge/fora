@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/auth"
-	"hive/internal/db"
-	"hive/internal/models"
-	"hive/internal/ratelimit"
+	"fora/internal/auth"
+	"fora/internal/db"
+	"fora/internal/models"
+	"fora/internal/ratelimit"
 )
 
 type contextKey string

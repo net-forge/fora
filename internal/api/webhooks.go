@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/db"
+	"fora/internal/db"
 )
 
 type createWebhookRequest struct {
@@ -108,7 +108,7 @@ func emitWebhookEvent(database *sql.DB, eventType string, payload map[string]any
 			if strings.TrimSpace(wh.Secret) != "" {
 				mac := hmac.New(sha256.New, []byte(wh.Secret))
 				_, _ = mac.Write(b)
-				req.Header.Set("X-Hive-Signature", hex.EncodeToString(mac.Sum(nil)))
+				req.Header.Set("X-Fora-Signature", hex.EncodeToString(mac.Sum(nil)))
 			}
 			_, _ = client.Do(req)
 		}

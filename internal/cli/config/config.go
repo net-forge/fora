@@ -28,7 +28,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".hive", "config.json"), nil
+	return filepath.Join(home, ".fora", "config.json"), nil
 }
 
 func Load() (*Config, error) {

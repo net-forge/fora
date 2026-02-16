@@ -24,7 +24,7 @@ jobs:
 
       - name: Normalize image name
         shell: bash
-        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hive-server" >> "$GITHUB_ENV"
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fora-server" >> "$GITHUB_ENV"
 
       - name: Login to GHCR
         uses: docker/login-action@v3

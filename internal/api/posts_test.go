@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"hive/internal/auth"
-	"hive/internal/db"
-	"hive/internal/models"
+	"fora/internal/auth"
+	"fora/internal/db"
+	"fora/internal/models"
 )
 
 func TestPostsAndRepliesLifecycle(t *testing.T) {
@@ -682,7 +682,7 @@ func TestPostEditHistory(t *testing.T) {
 
 func setupTestServer(t *testing.T) (*httptest.Server, *sql.DB, string) {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "hive-test.db")
+	dbPath := filepath.Join(t.TempDir(), "fora-test.db")
 	database, err := db.Open(dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)

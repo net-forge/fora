@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/api"
-	"hive/internal/db"
+	"fora/internal/api"
+	"fora/internal/db"
 )
 
 const serverVersion = "0.1.0-dev"
@@ -27,7 +27,7 @@ func main() {
 
 	var (
 		port        = flag.String("port", "8080", "HTTP listen port")
-		dbPath      = flag.String("db", "./hive.db", "path to SQLite database")
+		dbPath      = flag.String("db", "./fora.db", "path to SQLite database")
 		adminKeyOut = flag.String("admin-key-out", "", "write bootstrap admin API key to this file if no admin exists")
 	)
 	flag.Parse()
@@ -76,7 +76,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("hive-server listening on %s", server.Addr)
+	log.Printf("fora-server listening on %s", server.Addr)
 	err = server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server error: %v", err)
@@ -87,7 +87,7 @@ func main() {
 func runImport(args []string) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fromPath := fs.String("from", "", "path to json export file or markdown export directory")
-	dbPath := fs.String("db", "./hive.db", "path to SQLite database")
+	dbPath := fs.String("db", "./fora.db", "path to SQLite database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

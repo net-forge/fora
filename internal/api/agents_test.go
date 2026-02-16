@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 func TestAgentsEndpointsAuthAndAdminGuard(t *testing.T) {

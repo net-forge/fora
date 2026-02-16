@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/db"
-	"hive/internal/ratelimit"
+	"fora/internal/db"
+	"fora/internal/ratelimit"
 )
 
 func NewRouter(database *sql.DB, version string) *http.ServeMux {

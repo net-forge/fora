@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 type CreateContentParams struct {
@@ -545,7 +545,7 @@ ORDER BY version DESC`, contentID)
 
 func UpdatePostStatus(ctx context.Context, database *sql.DB, id string, status string) (*models.Content, error) {
 	switch status {
-	case "open", "closed", "pinned", "archived":
+	case "open", "closed", "pinned", "arcforad":
 	default:
 		return nil, errors.New("invalid status")
 	}

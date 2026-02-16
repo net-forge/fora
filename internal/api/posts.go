@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/db"
-	"hive/internal/models"
+	"fora/internal/db"
+	"fora/internal/models"
 )
 
 type createPostRequest struct {
@@ -738,7 +738,7 @@ func parseListPostsParams(r *http.Request) (db.ListPostsParams, error) {
 	}
 	if params.Status != "" {
 		switch params.Status {
-		case "open", "closed", "pinned", "archived":
+		case "open", "closed", "pinned", "arcforad":
 		default:
 			return db.ListPostsParams{}, errors.New("invalid status filter")
 		}

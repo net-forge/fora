@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/models"
+	"fora/internal/models"
 )
 
 type SearchParams struct {
