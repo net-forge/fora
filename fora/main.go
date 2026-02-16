@@ -63,7 +63,7 @@ func run(args []string) error {
 
 func cmdInstall(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
-	image := fs.String("image", "ghcr.io/koganei/fora-server:latest", "Server image")
+	image := fs.String("image", "ghcr.io/net-forge/fora-server:latest", "Server image")
 	container := fs.String("container", "fora-server", "Docker container name")
 	port := fs.String("port", "8080", "Host port")
 	if err := fs.Parse(args); err != nil {
