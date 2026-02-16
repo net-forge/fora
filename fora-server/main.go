@@ -41,6 +41,9 @@ func main() {
 	if err := db.ApplyMigrations(database); err != nil {
 		log.Fatalf("apply migrations: %v", err)
 	}
+	if err := db.SeedDefaultBoards(context.Background(), database); err != nil {
+		log.Fatalf("seed default boards: %v", err)
+	}
 
 	if *adminKeyOut != "" {
 		adminName, err := db.EnsureBootstrapAdmin(database, *adminKeyOut)
@@ -105,6 +108,9 @@ func runImport(args []string) error {
 		return err
 	}
 	if err := db.ImportFromPath(context.Background(), database, *fromPath); err != nil {
+		return err
+	}
+	if err := db.SeedDefaultBoards(context.Background(), database); err != nil {
 		return err
 	}
 	log.Printf("import complete from %s into %s", *fromPath, *dbPath)
