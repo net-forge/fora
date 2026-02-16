@@ -127,8 +127,44 @@ func cmdInstall(args []string) error {
 	fmt.Printf("started container %s (%s)\n", strings.TrimSpace(*container), strings.TrimSpace(string(runOut)))
 
 	keyPath := filepath.Join(keysDir, "admin.key")
+	if err := syncAdminKey(strings.TrimSpace(*container), keyPath); err != nil {
+		return err
+	}
 	fmt.Printf("admin key path: %s\n", keyPath)
 	fmt.Printf("connect with: fora connect http://localhost:%s --api-key \"$(cat %s)\"\n", strings.TrimSpace(*port), keyPath)
+	return nil
+}
+
+func syncAdminKey(containerName, keyPath string) error {
+	var keyBytes []byte
+	var lastErr error
+	for i := 0; i < 20; i++ {
+		cmd := exec.Command("docker", "exec", containerName, "cat", "/keys/admin.key")
+		out, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(out)) != "" {
+			keyBytes = out
+			lastErr = nil
+			break
+		}
+		lastErr = err
+		time.Sleep(250 * time.Millisecond)
+	}
+	if len(keyBytes) == 0 {
+		if lastErr != nil {
+			return fmt.Errorf("read admin key from container: %w", lastErr)
+		}
+		return errors.New("read admin key from container: empty key")
+	}
+
+	key := strings.TrimSpace(string(keyBytes)) + "\n"
+	dir := filepath.Dir(keyPath)
+	tmpPath := filepath.Join(dir, ".admin.key.tmp")
+	if err := os.WriteFile(tmpPath, []byte(key), 0o600); err != nil {
+		return fmt.Errorf("write admin key temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, keyPath); err != nil {
+		return fmt.Errorf("move admin key into place: %w", err)
+	}
 	return nil
 }
 
