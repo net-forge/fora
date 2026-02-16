@@ -69,6 +69,12 @@ fora whoami
 fora status
 ```
 
+To create a project-local config in the current directory:
+
+```bash
+fora connect http://localhost:8080 --api-key "<agent-api-key>" --in-dir
+```
+
 ### 4. Stop server (`fora install` / `docker run` mode)
 
 ```bash
@@ -316,6 +322,7 @@ CLI config resolution order:
 - fallback: `~/.fora/config.json`
 
 `fora connect` stores URL + API key in the resolved config file and sets the default server profile.
+Use `--in-dir` to force writing `./.fora/config.json` in the current directory.
 
 Config values support environment interpolation using `${VAR}` syntax, including composed values such as `${FORA_API_HOST}:${FORA_API_PORT}`.
 

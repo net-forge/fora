@@ -72,18 +72,14 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return LoadFromPath(p)
+}
+
+func LoadFromPath(p string) (*Config, error) {
 	b, err := os.ReadFile(p)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &Config{
-				Version:       1,
-				DefaultServer: "main",
-				Servers:       map[string]Server{},
-				Preferences: map[string]string{
-					"default_format": "table",
-					"watch_interval": "10s",
-				},
-			}, nil
+			return defaultConfig(), nil
 		}
 		return nil, err
 	}
@@ -111,6 +107,10 @@ func Save(c *Config) error {
 	if err != nil {
 		return err
 	}
+	return SaveToPath(c, p)
+}
+
+func SaveToPath(c *Config, p string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
@@ -175,4 +175,16 @@ func resolveEnvPlaceholders(raw string) string {
 		}
 		return ""
 	})
+}
+
+func defaultConfig() *Config {
+	return &Config{
+		Version:       1,
+		DefaultServer: "main",
+		Servers:       map[string]Server{},
+		Preferences: map[string]string{
+			"default_format": "table",
+			"watch_interval": "10s",
+		},
+	}
 }

@@ -171,12 +171,13 @@ func syncAdminKey(containerName, keyPath string) error {
 func cmdConnect(args []string) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
 	apiKey := fs.String("api-key", "", "API key")
+	inDir := fs.Bool("in-dir", false, "Write config to ./.fora/config.json in current directory")
 	positionals, err := parseInterspersedFlags(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(positionals) != 1 {
-		return errors.New("usage: fora connect <url> --api-key <key>")
+		return errors.New("usage: fora connect <url> --api-key <key> [--in-dir]")
 	}
 	rawURL := strings.TrimSpace(positionals[0])
 	if strings.TrimSpace(*apiKey) == "" {
@@ -196,9 +197,26 @@ func cmdConnect(args []string) error {
 		return fmt.Errorf("validate credentials: %w", err)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		return err
+	cfgPath := ""
+	if *inDir {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		cfgPath = filepath.Join(cwd, ".fora", "config.json")
+	}
+
+	var cfg *config.Config
+	if cfgPath == "" {
+		cfg, err = config.Load()
+		if err != nil {
+			return err
+		}
+	} else {
+		cfg, err = config.LoadFromPath(cfgPath)
+		if err != nil {
+			return err
+		}
 	}
 	cfg.SetDefault(rawURL, *apiKey)
 	if name, ok := whoami["name"].(string); ok {
@@ -206,8 +224,14 @@ func cmdConnect(args []string) error {
 		s.Agent = name
 		cfg.Servers[cfg.DefaultServer] = s
 	}
-	if err := config.Save(cfg); err != nil {
-		return err
+	if cfgPath == "" {
+		if err := config.Save(cfg); err != nil {
+			return err
+		}
+	} else {
+		if err := config.SaveToPath(cfg, cfgPath); err != nil {
+			return err
+		}
 	}
 	fmt.Printf("connected to %s\n", rawURL)
 	return nil
@@ -1274,7 +1298,7 @@ func printJSON(v any) error {
 func usage() error {
 	return errors.New(`usage:
   fora install [--image ref] [--container name] [--port n]
-  fora connect <url> --api-key <key>
+  fora connect <url> --api-key <key> [--in-dir]
   fora disconnect
   fora status
   fora whoami
