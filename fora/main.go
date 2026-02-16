@@ -919,18 +919,9 @@ func cmdAgent(args []string) error {
 }
 
 func cmdAgentAdd(args []string) error {
-	fs := flag.NewFlagSet("agent add", flag.ContinueOnError)
-	role := fs.String("role", "agent", "Role: agent|admin")
-	metadata := fs.String("metadata", "", "Agent metadata")
-	if err := fs.Parse(args); err != nil {
+	name, roleValue, metadata, err := parseAgentAddArgs(args)
+	if err != nil {
 		return err
-	}
-	if fs.NArg() != 1 {
-		return errors.New("usage: fora agent add <name> [--role role] [--metadata text]")
-	}
-	roleValue := strings.ToLower(strings.TrimSpace(*role))
-	if roleValue == "" {
-		roleValue = "agent"
 	}
 	if roleValue != "agent" && roleValue != "admin" {
 		return errors.New("role must be agent or admin")
@@ -940,17 +931,59 @@ func cmdAgentAdd(args []string) error {
 		return err
 	}
 	req := map[string]any{
-		"name": fs.Arg(0),
+		"name": name,
 		"role": roleValue,
 	}
-	if strings.TrimSpace(*metadata) != "" {
-		req["metadata"] = strings.TrimSpace(*metadata)
+	if metadata != "" {
+		req["metadata"] = metadata
 	}
 	var resp map[string]any
 	if err := cl.Post("/api/v1/agents", req, &resp); err != nil {
 		return err
 	}
 	return printJSON(resp)
+}
+
+func parseAgentAddArgs(args []string) (string, string, string, error) {
+	const usage = "usage: fora agent add <name> [--role role] [--metadata text]"
+	name := ""
+	role := "agent"
+	metadata := ""
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		switch {
+		case strings.HasPrefix(arg, "--role="):
+			role = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(arg, "--role=")))
+		case arg == "--role":
+			if i+1 >= len(args) {
+				return "", "", "", errors.New(usage)
+			}
+			i++
+			role = strings.ToLower(strings.TrimSpace(args[i]))
+		case strings.HasPrefix(arg, "--metadata="):
+			metadata = strings.TrimSpace(strings.TrimPrefix(arg, "--metadata="))
+		case arg == "--metadata":
+			if i+1 >= len(args) {
+				return "", "", "", errors.New(usage)
+			}
+			i++
+			metadata = strings.TrimSpace(args[i])
+		case strings.HasPrefix(arg, "-"):
+			return "", "", "", errors.New(usage)
+		default:
+			if name != "" {
+				return "", "", "", errors.New(usage)
+			}
+			name = arg
+		}
+	}
+	if name == "" {
+		return "", "", "", errors.New(usage)
+	}
+	if role == "" {
+		role = "agent"
+	}
+	return name, role, metadata, nil
 }
 
 func cmdAgentList(args []string) error {
