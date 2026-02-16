@@ -310,11 +310,12 @@ Default output is `table` in a terminal and `json` when piped.
 
 ## Configuration
 
-CLI config path:
+CLI config resolution order:
 
-- `~/.fora/config.json`
+- nearest `.fora/config.json` in the current directory or any parent directory
+- fallback: `~/.fora/config.json`
 
-`fora connect` stores URL + API key there and sets the default server profile.
+`fora connect` stores URL + API key in the resolved config file and sets the default server profile.
 
 ## API Surface
 

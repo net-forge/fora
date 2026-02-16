@@ -24,11 +24,43 @@ type Server struct {
 }
 
 func Path() (string, error) {
+	if cwd, err := os.Getwd(); err == nil {
+		if localPath, ok, err := findLocalPath(cwd); err != nil {
+			return "", err
+		} else if ok {
+			return localPath, nil
+		}
+	}
+	return homePath()
+}
+
+func homePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(home, ".fora", "config.json"), nil
+}
+
+func findLocalPath(start string) (string, bool, error) {
+	dir := start
+	for {
+		candidate := filepath.Join(dir, ".fora", "config.json")
+		info, err := os.Stat(candidate)
+		if err == nil {
+			if info.Mode().IsRegular() {
+				return candidate, true, nil
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", false, err
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false, nil
+		}
+		dir = parent
+	}
 }
 
 func Load() (*Config, error) {
