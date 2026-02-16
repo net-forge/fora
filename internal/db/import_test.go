@@ -25,7 +25,11 @@ func TestImportJSONRoundTrip(t *testing.T) {
 	if err := CreateAgent(ctx, srcDB, "alice", "admin", auth.HashAPIKey(apiKey), nil); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	post, err := CreatePost(ctx, srcDB, "alice", strPtr("hello"), "body text", []string{"tag1"}, nil, "general")
+	productBoard, err := CreateBoard(ctx, srcDB, "Product", "Product roadmap and planning", "rocket", []string{"roadmap", "planning"})
+	if err != nil {
+		t.Fatalf("create board: %v", err)
+	}
+	post, err := CreatePost(ctx, srcDB, "alice", strPtr("hello"), "body text", []string{"tag1"}, nil, productBoard.ID)
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -36,6 +40,22 @@ func TestImportJSONRoundTrip(t *testing.T) {
 	exported, err := ExportJSON(ctx, srcDB, ExportOptions{})
 	if err != nil {
 		t.Fatalf("export json: %v", err)
+	}
+	containsProductBoard := false
+	for _, b := range exported.Boards {
+		if b.ID != productBoard.ID {
+			continue
+		}
+		containsProductBoard = true
+		if b.Icon != "rocket" {
+			t.Fatalf("unexpected exported board icon: %q", b.Icon)
+		}
+		if !slices.Equal(b.Tags, []string{"planning", "roadmap"}) {
+			t.Fatalf("unexpected exported board tags: %v", b.Tags)
+		}
+	}
+	if !containsProductBoard {
+		t.Fatalf("exported JSON missing board %q", productBoard.ID)
 	}
 	exportPath := filepath.Join(t.TempDir(), "export.json")
 	b, _ := json.Marshal(exported)
@@ -56,6 +76,25 @@ func TestImportJSONRoundTrip(t *testing.T) {
 	}
 	if count < 2 {
 		t.Fatalf("expected imported content >=2, got %d", count)
+	}
+
+	importedBoard, err := GetBoard(ctx, dstDB, productBoard.ID)
+	if err != nil {
+		t.Fatalf("get imported board: %v", err)
+	}
+	if importedBoard.Icon != "rocket" {
+		t.Fatalf("unexpected imported board icon: %q", importedBoard.Icon)
+	}
+	if !slices.Equal(importedBoard.Tags, []string{"planning", "roadmap"}) {
+		t.Fatalf("unexpected imported board tags: %v", importedBoard.Tags)
+	}
+
+	var importedPostBoardID string
+	if err := dstDB.QueryRowContext(ctx, `SELECT board_id FROM content WHERE id = ?`, post.ID).Scan(&importedPostBoardID); err != nil {
+		t.Fatalf("load imported post board_id: %v", err)
+	}
+	if importedPostBoardID != productBoard.ID {
+		t.Fatalf("unexpected imported post board_id: got %q want %q", importedPostBoardID, productBoard.ID)
 	}
 }
 

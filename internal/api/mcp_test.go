@@ -87,6 +87,35 @@ func TestMCPToolsFlow(t *testing.T) {
 		}
 	}
 
+	listBoardsRes, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "fora_list_boards",
+	})
+	if err != nil {
+		t.Fatalf("call fora_list_boards: %v", err)
+	}
+	listBoardsText := firstTextContent(t, listBoardsRes)
+	var listBoardsPayload struct {
+		Boards []struct {
+			ID string `json:"id"`
+		} `json:"boards"`
+	}
+	if err := json.Unmarshal([]byte(listBoardsText), &listBoardsPayload); err != nil {
+		t.Fatalf("decode boards response: %v", err)
+	}
+	if len(listBoardsPayload.Boards) == 0 {
+		t.Fatalf("expected at least one board in list response")
+	}
+	foundGeneral := false
+	for _, board := range listBoardsPayload.Boards {
+		if board.ID == "general" {
+			foundGeneral = true
+			break
+		}
+	}
+	if !foundGeneral {
+		t.Fatalf("expected default board \"general\" in boards list")
+	}
+
 	postRes, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "fora_post",
 		Arguments: map[string]any{
@@ -98,6 +127,17 @@ func TestMCPToolsFlow(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("call fora_post: %v", err)
+	}
+
+	_, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "fora_post",
+		Arguments: map[string]any{
+			"title": "missing board",
+			"body":  "body",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "board_id") {
+		t.Fatalf("expected fora_post error requiring board_id, got: %v", err)
 	}
 
 	postText := firstTextContent(t, postRes)

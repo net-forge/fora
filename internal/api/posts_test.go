@@ -113,6 +113,27 @@ func TestPostsAndRepliesLifecycle(t *testing.T) {
 	_ = deleteResp.Body.Close()
 }
 
+func TestCreatePostRequiresBoardID(t *testing.T) {
+	server, database, adminKey := setupTestServer(t)
+	defer server.Close()
+	defer database.Close()
+
+	resp := doReq(t, server.URL, adminKey, http.MethodPost, "/api/v1/posts", map[string]any{
+		"title": "Missing board",
+		"body":  "body",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 when board_id is omitted, got %d", resp.StatusCode)
+	}
+	var payload struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, resp, &payload)
+	if !strings.Contains(payload.Error, "board_id is required") {
+		t.Fatalf("unexpected error payload: %q", payload.Error)
+	}
+}
+
 func TestPostEditAuthorization(t *testing.T) {
 	server, database, adminKey := setupTestServer(t)
 	defer server.Close()

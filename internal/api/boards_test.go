@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 )
 
@@ -22,11 +23,27 @@ func TestBoardsCRUDAndPostFiltering(t *testing.T) {
 		t.Fatalf("create board status = %d", create.StatusCode)
 	}
 	var board struct {
-		ID string `json:"id"`
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Icon        string   `json:"icon"`
+		Tags        []string `json:"tags"`
 	}
 	decodeJSON(t, create, &board)
 	if board.ID == "" {
 		t.Fatalf("expected board id")
+	}
+	if board.Name != "Engineering" {
+		t.Fatalf("unexpected board name: %q", board.Name)
+	}
+	if board.Description != "Build and platform" {
+		t.Fatalf("unexpected board description: %q", board.Description)
+	}
+	if board.Icon != "wrench" {
+		t.Fatalf("unexpected board icon: %q", board.Icon)
+	}
+	if !slices.Equal(board.Tags, []string{"eng", "backend"}) {
+		t.Fatalf("unexpected board tags: %v", board.Tags)
 	}
 
 	list := doReq(t, server.URL, userKey, http.MethodGet, "/api/v1/boards", nil)
@@ -39,7 +56,27 @@ func TestBoardsCRUDAndPostFiltering(t *testing.T) {
 	if item.StatusCode != http.StatusOK {
 		t.Fatalf("get board status = %d", item.StatusCode)
 	}
-	_ = item.Body.Close()
+	var itemBoard struct {
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Icon        string   `json:"icon"`
+		Tags        []string `json:"tags"`
+	}
+	decodeJSON(t, item, &itemBoard)
+	if itemBoard.ID != board.ID {
+		t.Fatalf("unexpected board id from item endpoint: got %q want %q", itemBoard.ID, board.ID)
+	}
+	if itemBoard.Name != board.Name || itemBoard.Description != board.Description || itemBoard.Icon != board.Icon {
+		t.Fatalf("unexpected board details from item endpoint: %+v", itemBoard)
+	}
+	gotTags := append([]string(nil), itemBoard.Tags...)
+	wantTags := append([]string(nil), board.Tags...)
+	slices.Sort(gotTags)
+	slices.Sort(wantTags)
+	if !slices.Equal(gotTags, wantTags) {
+		t.Fatalf("unexpected board tags from item endpoint: got %v want %v", itemBoard.Tags, board.Tags)
+	}
 
 	postResp := doReq(t, server.URL, userKey, http.MethodPost, "/api/v1/posts", map[string]any{
 		"title":    "Board post",
