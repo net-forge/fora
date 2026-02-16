@@ -922,16 +922,24 @@ func cmdAgent(args []string) error {
 }
 
 func cmdAgentAdd(args []string) error {
-	name, roleValue, metadata, err := parseAgentAddArgs(args)
+	name, roleValue, metadata, inDir, err := parseAgentAddArgs(args)
 	if err != nil {
 		return err
 	}
 	if roleValue != "agent" && roleValue != "admin" {
 		return errors.New("role must be agent or admin")
 	}
-	cl, err := defaultClient()
+	cfg, err := config.Load()
 	if err != nil {
 		return err
+	}
+	srv, ok := cfg.Default()
+	if !ok {
+		return errors.New("not connected. run: fora connect <url> --api-key <key>")
+	}
+	cl := client.New(srv.URL, srv.APIKey)
+	if cl == nil {
+		return errors.New("failed to initialize client")
 	}
 	req := map[string]any{
 		"name": name,
@@ -944,14 +952,42 @@ func cmdAgentAdd(args []string) error {
 	if err := cl.Post("/api/v1/agents", req, &resp); err != nil {
 		return err
 	}
+	if inDir {
+		apiKey, _ := resp["api_key"].(string)
+		if strings.TrimSpace(apiKey) == "" {
+			return errors.New("missing api_key in agent add response")
+		}
+		agentName, _ := resp["name"].(string)
+		if strings.TrimSpace(agentName) == "" {
+			agentName = name
+		}
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(cwd, ".fora", "config.json")
+		localCfg, err := config.LoadFromPath(path)
+		if err != nil {
+			return err
+		}
+		localCfg.SetDefault(srv.URL, apiKey)
+		s := localCfg.Servers[localCfg.DefaultServer]
+		s.Agent = strings.TrimSpace(agentName)
+		localCfg.Servers[localCfg.DefaultServer] = s
+		if err := config.SaveToPath(localCfg, path); err != nil {
+			return err
+		}
+	}
 	return printJSON(resp)
 }
 
-func parseAgentAddArgs(args []string) (string, string, string, error) {
-	const usage = "usage: fora agent add <name> [--role role] [--metadata text]"
+func parseAgentAddArgs(args []string) (string, string, string, bool, error) {
+	const usage = "usage: fora agent add <name> [--role role] [--metadata text] [--in-dir]"
 	name := ""
 	role := "agent"
 	metadata := ""
+	inDir := false
 	for i := 0; i < len(args); i++ {
 		arg := strings.TrimSpace(args[i])
 		switch {
@@ -959,7 +995,7 @@ func parseAgentAddArgs(args []string) (string, string, string, error) {
 			role = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(arg, "--role=")))
 		case arg == "--role":
 			if i+1 >= len(args) {
-				return "", "", "", errors.New(usage)
+				return "", "", "", false, errors.New(usage)
 			}
 			i++
 			role = strings.ToLower(strings.TrimSpace(args[i]))
@@ -967,26 +1003,35 @@ func parseAgentAddArgs(args []string) (string, string, string, error) {
 			metadata = strings.TrimSpace(strings.TrimPrefix(arg, "--metadata="))
 		case arg == "--metadata":
 			if i+1 >= len(args) {
-				return "", "", "", errors.New(usage)
+				return "", "", "", false, errors.New(usage)
 			}
 			i++
 			metadata = strings.TrimSpace(args[i])
+		case strings.HasPrefix(arg, "--in-dir="):
+			raw := strings.TrimSpace(strings.TrimPrefix(arg, "--in-dir="))
+			val, err := strconv.ParseBool(raw)
+			if err != nil {
+				return "", "", "", false, errors.New(usage)
+			}
+			inDir = val
+		case arg == "--in-dir":
+			inDir = true
 		case strings.HasPrefix(arg, "-"):
-			return "", "", "", errors.New(usage)
+			return "", "", "", false, errors.New(usage)
 		default:
 			if name != "" {
-				return "", "", "", errors.New(usage)
+				return "", "", "", false, errors.New(usage)
 			}
 			name = arg
 		}
 	}
 	if name == "" {
-		return "", "", "", errors.New(usage)
+		return "", "", "", false, errors.New(usage)
 	}
 	if role == "" {
 		role = "agent"
 	}
-	return name, role, metadata, nil
+	return name, role, metadata, inDir, nil
 }
 
 func cmdAgentList(args []string) error {
@@ -1310,7 +1355,7 @@ func usage() error {
   fora watch [--interval 10s] [--thread id] [--tag tag]
   fora search <query> [--author x] [--tag x] [--since t] [--threads-only]
   fora activity [--limit n] [--offset n] [--author a]
-  fora agent add <name> [--role agent|admin] [--metadata text]
+  fora agent add <name> [--role agent|admin] [--metadata text] [--in-dir]
   fora agent list [--format f] [--quiet]
   fora agent info <name> [--format f] [--quiet]
   fora agent remove <name>

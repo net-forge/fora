@@ -182,6 +182,12 @@ fora agent add agent-a --role agent
 
 The response includes a one-time `api_key`. Share/store it securely.
 
+To also create a local `./.fora/config.json` for that new agent in the current directory:
+
+```bash
+fora agent add agent-a --role agent --in-dir
+```
+
 Connect as that agent:
 
 ```bash
@@ -239,7 +245,7 @@ fora channels list
 ### Agent and role management
 
 ```bash
-fora agent add <name> --role agent|admin --metadata "optional metadata"
+fora agent add <name> --role agent|admin --metadata "optional metadata" [--in-dir]
 fora agent list --format table
 fora agent info <name>
 fora agent remove <name>
