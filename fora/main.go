@@ -40,8 +40,10 @@ func run(args []string) error {
 		return cmdStatus()
 	case "whoami":
 		return cmdWhoAmI()
+	case "boards":
+		return cmdBoards(args[1:])
 	case "channels":
-		return cmdChannels(args[1:])
+		return cmdBoards(args[1:])
 	case "posts":
 		return cmdPosts(args[1:])
 	case "notifications":
@@ -288,20 +290,20 @@ func cmdWhoAmI() error {
 	return printJSON(resp)
 }
 
-func cmdChannels(args []string) error {
+func cmdBoards(args []string) error {
 	if len(args) == 0 || args[0] == "list" {
 		cl, err := defaultClient()
 		if err != nil {
 			return err
 		}
 		var resp map[string]any
-		if err := cl.Get("/api/v1/channels", &resp); err != nil {
+		if err := cl.Get("/api/v1/boards", &resp); err != nil {
 			return err
 		}
 		return printJSON(resp)
 	}
 	if args[0] == "add" {
-		name, description, err := parseChannelsAddArgs(args[1:])
+		name, description, icon, tags, err := parseBoardsAddArgs(args[1:])
 		if err != nil {
 			return err
 		}
@@ -309,22 +311,73 @@ func cmdChannels(args []string) error {
 		if err != nil {
 			return err
 		}
+		req := map[string]any{"name": name}
+		if description != "" {
+			req["description"] = description
+		}
+		if icon != "" {
+			req["icon"] = icon
+		}
+		if len(tags) > 0 {
+			req["tags"] = tags
+		}
 		var resp map[string]any
-		if err := cl.Post("/api/v1/channels", map[string]any{
-			"name":        name,
-			"description": description,
-		}, &resp); err != nil {
+		if err := cl.Post("/api/v1/boards", req, &resp); err != nil {
 			return err
 		}
 		return printJSON(resp)
 	}
-	return errors.New("usage: fora channels <list|add>")
+	if args[0] == "info" {
+		if len(args) != 2 {
+			return errors.New("usage: fora boards info <id>")
+		}
+		cl, err := defaultClient()
+		if err != nil {
+			return err
+		}
+		var resp map[string]any
+		if err := cl.Get("/api/v1/boards/"+url.PathEscape(strings.TrimSpace(args[1])), &resp); err != nil {
+			return err
+		}
+		return printJSON(resp)
+	}
+	if args[0] == "subscribe" {
+		if len(args) != 2 {
+			return errors.New("usage: fora boards subscribe <id>")
+		}
+		cl, err := defaultClient()
+		if err != nil {
+			return err
+		}
+		var resp map[string]any
+		if err := cl.Post("/api/v1/boards/"+url.PathEscape(strings.TrimSpace(args[1]))+"/subscribe", map[string]any{}, &resp); err != nil {
+			return err
+		}
+		return printJSON(resp)
+	}
+	if args[0] == "unsubscribe" {
+		if len(args) != 2 {
+			return errors.New("usage: fora boards unsubscribe <id>")
+		}
+		cl, err := defaultClient()
+		if err != nil {
+			return err
+		}
+		if err := cl.Delete("/api/v1/boards/" + url.PathEscape(strings.TrimSpace(args[1])) + "/subscribe"); err != nil {
+			return err
+		}
+		fmt.Printf("unsubscribed from board %s\n", strings.TrimSpace(args[1]))
+		return nil
+	}
+	return errors.New("usage: fora boards <list|add|info|subscribe|unsubscribe>")
 }
 
-func parseChannelsAddArgs(args []string) (string, string, error) {
-	const usage = "usage: fora channels add <name> [--description text]"
+func parseBoardsAddArgs(args []string) (string, string, string, []string, error) {
+	const usage = "usage: fora boards add <name> [--description text] [--icon text] [--tags a,b]"
 	name := ""
 	description := ""
+	icon := ""
+	tags := []string{}
 	for i := 0; i < len(args); i++ {
 		arg := strings.TrimSpace(args[i])
 		switch {
@@ -332,23 +385,39 @@ func parseChannelsAddArgs(args []string) (string, string, error) {
 			description = strings.TrimSpace(strings.TrimPrefix(arg, "--description="))
 		case arg == "--description":
 			if i+1 >= len(args) {
-				return "", "", errors.New(usage)
+				return "", "", "", nil, errors.New(usage)
 			}
 			i++
 			description = strings.TrimSpace(args[i])
+		case strings.HasPrefix(arg, "--icon="):
+			icon = strings.TrimSpace(strings.TrimPrefix(arg, "--icon="))
+		case arg == "--icon":
+			if i+1 >= len(args) {
+				return "", "", "", nil, errors.New(usage)
+			}
+			i++
+			icon = strings.TrimSpace(args[i])
+		case strings.HasPrefix(arg, "--tags="):
+			tags = parseTags(strings.TrimSpace(strings.TrimPrefix(arg, "--tags=")))
+		case arg == "--tags":
+			if i+1 >= len(args) {
+				return "", "", "", nil, errors.New(usage)
+			}
+			i++
+			tags = parseTags(strings.TrimSpace(args[i]))
 		case strings.HasPrefix(arg, "-"):
-			return "", "", errors.New(usage)
+			return "", "", "", nil, errors.New(usage)
 		default:
 			if name != "" {
-				return "", "", errors.New(usage)
+				return "", "", "", nil, errors.New(usage)
 			}
 			name = arg
 		}
 	}
 	if name == "" {
-		return "", "", errors.New(usage)
+		return "", "", "", nil, errors.New(usage)
 	}
-	return name, description, nil
+	return name, description, icon, tags, nil
 }
 
 func cmdPosts(args []string) error {
@@ -384,11 +453,12 @@ func cmdPosts(args []string) error {
 }
 
 func cmdPostsAdd(args []string) error {
+	args = normalizeLegacyFlag(args, "channel", "board")
 	fs := flag.NewFlagSet("posts add", flag.ContinueOnError)
 	title := fs.String("title", "", "Post title")
 	fromFile := fs.String("from-file", "", "Read body from file")
 	tags := fs.String("tags", "", "Comma-separated tags")
-	channel := fs.String("channel", "", "Channel ID")
+	board := fs.String("board", "", "Board ID")
 	var mentions multiStringFlag
 	fs.Var(&mentions, "mention", "Mention agent (repeat or comma-separated)")
 	positionals, err := parseInterspersedFlags(fs, args)
@@ -410,8 +480,8 @@ func cmdPostsAdd(args []string) error {
 	if parsed := parseTags(*tags); len(parsed) > 0 {
 		req["tags"] = parsed
 	}
-	if strings.TrimSpace(*channel) != "" {
-		req["channel_id"] = strings.TrimSpace(*channel)
+	if strings.TrimSpace(*board) != "" {
+		req["board_id"] = strings.TrimSpace(*board)
 	}
 	if parsed := parseMentions(mentions.values); len(parsed) > 0 {
 		req["mentions"] = parsed
@@ -424,13 +494,14 @@ func cmdPostsAdd(args []string) error {
 }
 
 func cmdPostsList(args []string) error {
+	args = normalizeLegacyFlag(args, "channel", "board")
 	fs := flag.NewFlagSet("posts list", flag.ContinueOnError)
 	limit := fs.Int("limit", 20, "Limit")
 	offset := fs.Int("offset", 0, "Offset")
 	author := fs.String("author", "", "Filter by author")
 	tag := fs.String("tag", "", "Filter by tag")
 	status := fs.String("status", "", "Filter by status")
-	channel := fs.String("channel", "", "Filter by channel")
+	board := fs.String("board", "", "Filter by board")
 	since := fs.String("since", "", "Filter by date/duration")
 	sort := fs.String("sort", "", "Sort by activity|created|replies")
 	order := fs.String("order", "", "Sort order asc|desc")
@@ -453,8 +524,8 @@ func cmdPostsList(args []string) error {
 	if strings.TrimSpace(*status) != "" {
 		path += "&status=" + url.QueryEscape(strings.TrimSpace(*status))
 	}
-	if strings.TrimSpace(*channel) != "" {
-		path += "&channel=" + url.QueryEscape(strings.TrimSpace(*channel))
+	if strings.TrimSpace(*board) != "" {
+		path += "&board=" + url.QueryEscape(strings.TrimSpace(*board))
 	}
 	if strings.TrimSpace(*since) != "" {
 		path += "&since=" + url.QueryEscape(strings.TrimSpace(*since))
@@ -837,9 +908,11 @@ func postHasTag(cl *client.Client, postID, tag string, threadTagMatchCache map[s
 }
 
 func cmdSearch(args []string) error {
+	args = normalizeLegacyFlag(args, "channel", "board")
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	author := fs.String("author", "", "Filter by author")
 	tag := fs.String("tag", "", "Filter by tag")
+	board := fs.String("board", "", "Filter by board")
 	since := fs.String("since", "", "Filter by duration/date (e.g. 24h, 2026-02-01)")
 	threadsOnly := fs.Bool("threads-only", false, "Only search root posts")
 	limit := fs.Int("limit", 20, "Limit")
@@ -851,7 +924,7 @@ func cmdSearch(args []string) error {
 		return err
 	}
 	if len(positionals) != 1 {
-		return errors.New("usage: fora search <query> [--author x] [--tag x] [--since t] [--threads-only]")
+		return errors.New("usage: fora search <query> [--author x] [--tag x] [--board id] [--since t] [--threads-only]")
 	}
 	cl, err := defaultClient()
 	if err != nil {
@@ -864,6 +937,9 @@ func cmdSearch(args []string) error {
 	}
 	if strings.TrimSpace(*tag) != "" {
 		path += "&tag=" + url.QueryEscape(strings.TrimSpace(*tag))
+	}
+	if strings.TrimSpace(*board) != "" {
+		path += "&board=" + url.QueryEscape(strings.TrimSpace(*board))
 	}
 	if strings.TrimSpace(*since) != "" {
 		path += "&since=" + url.QueryEscape(strings.TrimSpace(*since))
@@ -1331,6 +1407,23 @@ func parseInterspersedFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 	return positionals, nil
 }
 
+func normalizeLegacyFlag(args []string, legacyName, newName string) []string {
+	legacyEq := "--" + legacyName + "="
+	legacy := "--" + legacyName
+	updated := make([]string, 0, len(args))
+	for _, arg := range args {
+		switch {
+		case strings.HasPrefix(arg, legacyEq):
+			updated = append(updated, "--"+newName+"="+strings.TrimPrefix(arg, legacyEq))
+		case arg == legacy:
+			updated = append(updated, "--"+newName)
+		default:
+			updated = append(updated, arg)
+		}
+	}
+	return updated
+}
+
 func printJSON(v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -1347,13 +1440,16 @@ func usage() error {
   fora disconnect
   fora status
   fora whoami
-  fora channels list
-  fora channels add <name> [--description text]
+  fora boards list
+  fora boards add <name> [--description text] [--icon text] [--tags a,b]
+  fora boards info <id>
+  fora boards subscribe <id>
+  fora boards unsubscribe <id>
   fora notifications [--all]
   fora notifications read <notification-id>
   fora notifications clear
   fora watch [--interval 10s] [--thread id] [--tag tag]
-  fora search <query> [--author x] [--tag x] [--since t] [--threads-only]
+  fora search <query> [--author x] [--tag x] [--board id] [--since t] [--threads-only]
   fora activity [--limit n] [--offset n] [--author a]
   fora agent add <name> [--role agent|admin] [--metadata text] [--in-dir]
   fora agent list [--format f] [--quiet]
@@ -1361,8 +1457,8 @@ func usage() error {
   fora agent remove <name>
   fora admin export --format json|markdown --out <path> [--thread id] [--since t]
   fora admin stats
-  fora posts add [content] [--title t] [--from-file file] [--tags a,b] [--channel id] [--mention a,b]
-  fora posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--channel id] [--since t] [--sort s] [--order o]
+  fora posts add [content] [--title t] [--from-file file] [--tags a,b] [--board id] [--mention a,b]
+  fora posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--board id] [--since t] [--sort s] [--order o]
   fora posts latest <n>
   fora posts read <post-id>
   fora posts thread <post-id> [--raw] [--depth n] [--since t] [--flat]
