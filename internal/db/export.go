@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"fora/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 type ExportOptions struct {
@@ -21,6 +21,7 @@ type ExportOptions struct {
 type JSONExport struct {
 	ExportedAt    string                `json:"exported_at"`
 	Agents        []models.Agent        `json:"agents"`
+	Boards        []Board               `json:"boards"`
 	Content       []models.Content      `json:"content"`
 	Tags          map[string][]string   `json:"tags"`
 	Mentions      map[string][]string   `json:"mentions"`
@@ -34,6 +35,10 @@ type MarkdownFile struct {
 
 func ExportJSON(ctx context.Context, database *sql.DB, opts ExportOptions) (*JSONExport, error) {
 	agents, err := ListAgents(ctx, database)
+	if err != nil {
+		return nil, err
+	}
+	boards, err := ListBoards(ctx, database)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +66,7 @@ func ExportJSON(ctx context.Context, database *sql.DB, opts ExportOptions) (*JSO
 	return &JSONExport{
 		ExportedAt:    nowRFC3339(),
 		Agents:        agents,
+		Boards:        boards,
 		Content:       content,
 		Tags:          tags,
 		Mentions:      mentions,
@@ -144,7 +150,7 @@ func ExportMarkdown(ctx context.Context, database *sql.DB, opts ExportOptions) (
 
 func exportContent(ctx context.Context, database *sql.DB, opts ExportOptions) ([]models.Content, error) {
 	query := `
-SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status
+SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, COALESCE(board_id, '')
 FROM content
 WHERE 1=1`
 	args := []any{}
@@ -166,7 +172,7 @@ WHERE 1=1`
 	out := make([]models.Content, 0)
 	for rows.Next() {
 		var c models.Content
-		if err := rows.Scan(&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created, &c.Updated, &c.ThreadID, &c.ParentID, &c.Status); err != nil {
+		if err := rows.Scan(&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created, &c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.BoardID); err != nil {
 			return nil, err
 		}
 		if c.Type == "post" {
@@ -280,6 +286,7 @@ func renderFrontmatter(c models.Content) string {
 		Created  string   `yaml:"created"`
 		Updated  string   `yaml:"updated"`
 		ThreadID string   `yaml:"thread_id"`
+		BoardID  string   `yaml:"board_id"`
 		ParentID *string  `yaml:"parent_id,omitempty"`
 		Status   string   `yaml:"status"`
 		Tags     []string `yaml:"tags,omitempty"`
@@ -291,6 +298,7 @@ func renderFrontmatter(c models.Content) string {
 		Created:  c.Created,
 		Updated:  c.Updated,
 		ThreadID: c.ThreadID,
+		BoardID:  c.BoardID,
 		ParentID: c.ParentID,
 		Status:   c.Status,
 		Tags:     c.Tags,

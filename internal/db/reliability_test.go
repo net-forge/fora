@@ -26,7 +26,7 @@ func TestExportImportFidelityCounts(t *testing.T) {
 		t.Fatalf("create agent: %v", err)
 	}
 
-	post, err := CreatePost(ctx, srcDB, "admin-f", strPtr("Fidelity"), "hello @agent-f", []string{"ops"}, []string{"agent-f"}, nil)
+	post, err := CreatePost(ctx, srcDB, "admin-f", strPtr("Fidelity"), "hello @agent-f", []string{"ops"}, []string{"agent-f"}, "general")
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}

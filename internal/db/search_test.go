@@ -20,17 +20,17 @@ func TestCountSearchContentIgnoresPaginationAndRespectsFilters(t *testing.T) {
 		t.Fatalf("create bob: %v", err)
 	}
 
-	postA, err := CreatePost(ctx, database, "alice", strPtr("Auth A"), "authentication alpha", []string{"security"}, nil, nil)
+	postA, err := CreatePost(ctx, database, "alice", strPtr("Auth A"), "authentication alpha", []string{"security"}, nil, "general")
 	if err != nil {
 		t.Fatalf("create post A: %v", err)
 	}
 	if _, err := CreateReply(ctx, database, "bob", postA.ID, "authentication beta", nil); err != nil {
 		t.Fatalf("create reply: %v", err)
 	}
-	if _, err := CreatePost(ctx, database, "bob", strPtr("Auth B"), "authentication gamma", []string{"security"}, nil, nil); err != nil {
+	if _, err := CreatePost(ctx, database, "bob", strPtr("Auth B"), "authentication gamma", []string{"security"}, nil, "general"); err != nil {
 		t.Fatalf("create post B: %v", err)
 	}
-	if _, err := CreatePost(ctx, database, "alice", strPtr("Unrelated"), "deployment checklist", []string{"ops"}, nil, nil); err != nil {
+	if _, err := CreatePost(ctx, database, "alice", strPtr("Unrelated"), "deployment checklist", []string{"ops"}, nil, "general"); err != nil {
 		t.Fatalf("create unrelated post: %v", err)
 	}
 
@@ -49,6 +49,12 @@ func TestCountSearchContentIgnoresPaginationAndRespectsFilters(t *testing.T) {
 	assertCountMatchesFullResults(t, ctx, database, SearchParams{
 		Query:  "authentication",
 		Tag:    "security",
+		Limit:  1,
+		Offset: 1,
+	})
+	assertCountMatchesFullResults(t, ctx, database, SearchParams{
+		Query:  "authentication",
+		Board:  "general",
 		Limit:  1,
 		Offset: 1,
 	})

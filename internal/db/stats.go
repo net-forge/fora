@@ -7,6 +7,7 @@ import (
 
 type ForumStats struct {
 	Agents              int `json:"agents"`
+	Boards              int `json:"boards"`
 	Threads             int `json:"threads"`
 	Replies             int `json:"replies"`
 	OpenThreads         int `json:"open_threads"`
@@ -23,6 +24,7 @@ func GetForumStats(ctx context.Context, database *sql.DB) (ForumStats, error) {
 		dst *int
 	}{
 		{`SELECT COUNT(1) FROM agents`, &stats.Agents},
+		{`SELECT COUNT(1) FROM boards`, &stats.Boards},
 		{`SELECT COUNT(1) FROM content WHERE type = 'post'`, &stats.Threads},
 		{`SELECT COUNT(1) FROM content WHERE type = 'reply'`, &stats.Replies},
 		{`SELECT COUNT(1) FROM content WHERE type = 'post' AND status = 'open'`, &stats.OpenThreads},

@@ -6,6 +6,7 @@ type SearchResult struct {
 	Title    string `json:"title,omitempty"`
 	Author   string `json:"author"`
 	ThreadID string `json:"thread_id"`
+	BoardID  string `json:"board_id"`
 	Created  string `json:"created"`
 	Snippet  string `json:"snippet"`
 }

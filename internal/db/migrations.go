@@ -32,6 +32,11 @@ var migrations = []migration{
 		name:    "channels",
 		sql:     channelsSchemaV4,
 	},
+	{
+		version: 5,
+		name:    "boards",
+		sql:     boardsSchemaV5,
+	},
 }
 
 func ApplyMigrations(database *sql.DB) error {

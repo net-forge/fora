@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"fora/internal/auth"
 	"fora/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 func ImportFromPath(ctx context.Context, database *sql.DB, fromPath string) error {
@@ -51,15 +51,31 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 			return err
 		}
 	}
+	for _, b := range payload.Boards {
+		if _, err := tx.ExecContext(ctx, `
+INSERT OR IGNORE INTO boards (id, name, description, icon, created)
+VALUES (?, ?, ?, ?, ?)`,
+			b.ID, b.Name, nullableString(b.Description), nullableString(b.Icon), b.Created); err != nil {
+			return err
+		}
+		for _, tag := range b.Tags {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO board_tags (board_id, tag) VALUES (?, ?)`, b.ID, tag); err != nil {
+				return err
+			}
+		}
+	}
 
 	insertContent := func(c models.Content) error {
 		if err := ensureAgentForImportTx(ctx, tx, c.Author); err != nil {
 			return err
 		}
+		if strings.TrimSpace(c.BoardID) == "" && c.Type == "post" {
+			c.BoardID = "general"
+		}
 		_, err := tx.ExecContext(ctx, `
-INSERT OR REPLACE INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			c.ID, c.Type, c.Author, c.Title, c.Body, c.Created, c.Updated, c.ThreadID, c.ParentID, c.Status)
+INSERT OR REPLACE INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status, board_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			c.ID, c.Type, c.Author, c.Title, c.Body, c.Created, c.Updated, c.ThreadID, c.ParentID, c.Status, nullableString(c.BoardID))
 		return err
 	}
 	for _, c := range payload.Content {
@@ -162,11 +178,15 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 		status := toString(meta["status"])
 		title := toStringPtr(meta["title"])
 		parentID := toStringPtr(meta["parent_id"])
+		boardID := toString(meta["board_id"])
 		if id == "" || typ == "" || author == "" || created == "" || updated == "" || threadID == "" {
 			return fmt.Errorf("incomplete frontmatter in %s", f)
 		}
 		if status == "" {
 			status = "open"
+		}
+		if boardID == "" && typ == "post" {
+			boardID = "general"
 		}
 		records = append(records, markdownRecord{
 			content: models.Content{
@@ -180,6 +200,7 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 				ThreadID: threadID,
 				ParentID: parentID,
 				Status:   status,
+				BoardID:  boardID,
 			},
 			tags: parseTags(meta["tags"]),
 		})
@@ -190,11 +211,11 @@ func ImportMarkdown(ctx context.Context, database *sql.DB, dir string) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
-INSERT OR REPLACE INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT OR REPLACE INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status, board_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			record.content.ID, record.content.Type, record.content.Author, record.content.Title,
 			record.content.Body, record.content.Created, record.content.Updated, record.content.ThreadID,
-			record.content.ParentID, record.content.Status); err != nil {
+			record.content.ParentID, record.content.Status, nullableString(record.content.BoardID)); err != nil {
 			return err
 		}
 

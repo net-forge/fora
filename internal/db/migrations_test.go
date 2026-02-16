@@ -26,7 +26,7 @@ func TestMigrationsIdempotentAndLatestVersionApplied(t *testing.T) {
 	if err := database.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&latest); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if latest < 2 {
-		t.Fatalf("expected latest schema version >=2, got %d", latest)
+	if latest < 5 {
+		t.Fatalf("expected latest schema version >=5, got %d", latest)
 	}
 }

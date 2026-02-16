@@ -23,7 +23,7 @@ func TestCreatePostUpdatesAuthorLastActive(t *testing.T) {
 		t.Fatalf("expected last_active to be NULL before post creation, got %q", before.String)
 	}
 
-	post, err := CreatePost(ctx, database, "alice", strPtr("hello"), "post body", nil, nil, nil)
+	post, err := CreatePost(ctx, database, "alice", strPtr("hello"), "post body", nil, nil, "general")
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestCreateReplyUpdatesAuthorLastActive(t *testing.T) {
 		t.Fatalf("create agent bob: %v", err)
 	}
 
-	post, err := CreatePost(ctx, database, "alice", strPtr("hello"), "post body", nil, nil, nil)
+	post, err := CreatePost(ctx, database, "alice", strPtr("hello"), "post body", nil, nil, "general")
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}

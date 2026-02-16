@@ -32,6 +32,7 @@ type ListPostsParams struct {
 
 	Author  string
 	Tags    []string
+	Board   string
 	Channel string
 	Status  string
 	Since   *time.Time
@@ -45,9 +46,13 @@ type ListActivityParams struct {
 	Author string
 }
 
-func CreatePost(ctx context.Context, database *sql.DB, author string, title *string, body string, tags []string, mentions []string, channelID *string) (*models.Content, error) {
+func CreatePost(ctx context.Context, database *sql.DB, author string, title *string, body string, tags []string, mentions []string, boardID string) (*models.Content, error) {
 	if strings.TrimSpace(body) == "" {
 		return nil, errors.New("body is required")
+	}
+	boardID = strings.TrimSpace(boardID)
+	if boardID == "" {
+		return nil, errors.New("board_id is required")
 	}
 	id := generateContentID(body)
 	now := nowRFC3339()
@@ -60,9 +65,9 @@ func CreatePost(ctx context.Context, database *sql.DB, author string, title *str
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-INSERT INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status, channel_id)
+INSERT INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status, board_id)
 VALUES (?, 'post', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-		id, author, title, body, now, now, id, status, channelID)
+		id, author, title, body, now, now, id, status, boardID)
 	if err != nil {
 		if isUniqueConstraint(err) {
 			existing, getErr := getContentTx(ctx, tx, id)
@@ -85,6 +90,9 @@ VALUES (?, 'post', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
 	if err := createMentionNotificationsTx(ctx, tx, author, id, id, body, resolvedMentions); err != nil {
 		return nil, err
 	}
+	if err := createBoardSubscriptionNotifsTx(ctx, tx, author, boardID, id, id, body); err != nil {
+		return nil, err
+	}
 	if err := insertInitialThreadStatsTx(ctx, tx, id, author, now); err != nil {
 		return nil, err
 	}
@@ -93,18 +101,18 @@ VALUES (?, 'post', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
 	}
 
 	c := &models.Content{
-		ID:        id,
-		Type:      "post",
-		Author:    author,
-		Title:     title,
-		Body:      body,
-		Created:   now,
-		Updated:   now,
-		ThreadID:  id,
-		ParentID:  nil,
-		Status:    status,
-		ChannelID: channelID,
-		Tags:      dedupeTags(tags),
+		ID:       id,
+		Type:     "post",
+		Author:   author,
+		Title:    title,
+		Body:     body,
+		Created:  now,
+		Updated:  now,
+		ThreadID: id,
+		ParentID: nil,
+		Status:   status,
+		BoardID:  boardID,
+		Tags:     dedupeTags(tags),
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -133,9 +141,9 @@ func CreateReply(ctx context.Context, database *sql.DB, author string, parentID 
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-INSERT INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status)
-VALUES (?, 'reply', ?, NULL, ?, ?, ?, ?, ?, ?)`,
-		id, author, body, now, now, threadID, parentID, status)
+INSERT INTO content (id, type, author, title, body, created, updated, thread_id, parent_id, status, board_id)
+VALUES (?, 'reply', ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+		id, author, body, now, now, threadID, parentID, status, parent.BoardID)
 	if err != nil {
 		if isUniqueConstraint(err) {
 			existing, getErr := getContentTx(ctx, tx, id)
@@ -174,6 +182,7 @@ VALUES (?, 'reply', ?, NULL, ?, ?, ?, ?, ?, ?)`,
 		ThreadID: threadID,
 		ParentID: &parentID,
 		Status:   status,
+		BoardID:  parent.BoardID,
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -183,13 +192,13 @@ VALUES (?, 'reply', ?, NULL, ?, ?, ?, ?, ?, ?)`,
 
 func GetContent(ctx context.Context, database *sql.DB, id string) (*models.Content, error) {
 	row := database.QueryRowContext(ctx, `
-SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, channel_id
+SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, COALESCE(board_id, '')
 FROM content
 WHERE id = ?`, id)
 	c := &models.Content{}
 	if err := row.Scan(
 		&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created,
-		&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.ChannelID,
+		&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.BoardID,
 	); err != nil {
 		return nil, err
 	}
@@ -235,7 +244,7 @@ LEFT JOIN thread_stats ts ON ts.thread_id = c.id` + whereClause
 	}
 
 	query := `
-SELECT c.id, c.type, c.author, c.title, c.body, c.created, c.updated, c.thread_id, c.parent_id, c.status, c.channel_id,
+SELECT c.id, c.type, c.author, c.title, c.body, c.created, c.updated, c.thread_id, c.parent_id, c.status, COALESCE(c.board_id, ''),
        COALESCE(ts.reply_count, 0), COALESCE(ts.last_activity, c.created), COALESCE(ts.participants, '[]'), COALESCE(ts.participant_count, 1)
 FROM content c
 LEFT JOIN thread_stats ts ON ts.thread_id = c.id` + whereClause +
@@ -256,7 +265,7 @@ LEFT JOIN thread_stats ts ON ts.thread_id = c.id` + whereClause +
 		)
 		if err := rows.Scan(
 			&item.ID, &item.Type, &item.Author, &item.Title, &item.Body, &item.Created,
-			&item.Updated, &item.ThreadID, &item.ParentID, &item.Status, &item.ChannelID,
+			&item.Updated, &item.ThreadID, &item.ParentID, &item.Status, &item.BoardID,
 			&item.ReplyCount, &item.LastActivity, &participantsJSON, &item.ParticipantCount,
 		); err != nil {
 			return nil, 0, err
@@ -289,9 +298,13 @@ func listPostsWhereClause(params ListPostsParams) (string, []any) {
 		whereClause += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
 		args = append(args, tag)
 	}
-	if params.Channel != "" {
-		whereClause += " AND c.channel_id = ?"
-		args = append(args, params.Channel)
+	board := strings.TrimSpace(params.Board)
+	if board == "" {
+		board = strings.TrimSpace(params.Channel)
+	}
+	if board != "" {
+		whereClause += " AND c.board_id = ?"
+		args = append(args, board)
 	}
 	if params.Since != nil {
 		whereClause += " AND COALESCE(ts.last_activity, c.created) >= ?"
@@ -302,7 +315,7 @@ func listPostsWhereClause(params ListPostsParams) (string, []any) {
 
 func ListReplies(ctx context.Context, database *sql.DB, parentID string, limit, offset int) ([]models.Content, error) {
 	rows, err := database.QueryContext(ctx, `
-SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, channel_id
+SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, COALESCE(board_id, '')
 FROM content
 WHERE parent_id = ? AND type = 'reply'
 ORDER BY created ASC
@@ -317,7 +330,7 @@ LIMIT ? OFFSET ?`, parentID, limit, offset)
 		var c models.Content
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created,
-			&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.ChannelID,
+			&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.BoardID,
 		); err != nil {
 			return nil, err
 		}
@@ -382,7 +395,7 @@ WHERE id = ?`, id).Scan(&threadID); err != nil {
 
 func ListThreadContent(ctx context.Context, database *sql.DB, threadID string) ([]models.Content, error) {
 	rows, err := database.QueryContext(ctx, `
-SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, channel_id
+SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, COALESCE(board_id, '')
 FROM content
 WHERE thread_id = ?
 ORDER BY created ASC`, threadID)
@@ -396,7 +409,7 @@ ORDER BY created ASC`, threadID)
 		var c models.Content
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created,
-			&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.ChannelID,
+			&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.BoardID,
 		); err != nil {
 			return nil, err
 		}
@@ -806,13 +819,13 @@ func generateContentID(body string) string {
 
 func getContentTx(ctx context.Context, tx *sql.Tx, id string) (*models.Content, error) {
 	row := tx.QueryRowContext(ctx, `
-SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, channel_id
+SELECT id, type, author, title, body, created, updated, thread_id, parent_id, status, COALESCE(board_id, '')
 FROM content
 WHERE id = ?`, id)
 	c := &models.Content{}
 	if err := row.Scan(
 		&c.ID, &c.Type, &c.Author, &c.Title, &c.Body, &c.Created,
-		&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.ChannelID,
+		&c.Updated, &c.ThreadID, &c.ParentID, &c.Status, &c.BoardID,
 	); err != nil {
 		return nil, err
 	}
@@ -875,6 +888,33 @@ func createMentionNotificationsTx(
 		}
 	}
 	return nil
+}
+
+func createBoardSubscriptionNotifsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	author, boardID, threadID, contentID, preview string,
+) error {
+	rows, err := tx.QueryContext(ctx, `
+SELECT agent
+FROM board_subscriptions
+WHERE board_id = ? AND agent <> ?
+ORDER BY agent ASC`, boardID, author)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var recipient string
+		if err := rows.Scan(&recipient); err != nil {
+			return err
+		}
+		if err := createNotificationTx(ctx, tx, recipient, "board_post", author, threadID, contentID, preview); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func createReplyNotificationsTx(

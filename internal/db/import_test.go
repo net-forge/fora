@@ -25,7 +25,7 @@ func TestImportJSONRoundTrip(t *testing.T) {
 	if err := CreateAgent(ctx, srcDB, "alice", "admin", auth.HashAPIKey(apiKey), nil); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	post, err := CreatePost(ctx, srcDB, "alice", strPtr("hello"), "body text", []string{"tag1"}, nil, nil)
+	post, err := CreatePost(ctx, srcDB, "alice", strPtr("hello"), "body text", []string{"tag1"}, nil, "general")
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestImportMarkdownRoundTrip(t *testing.T) {
 	if err := CreateAgent(ctx, srcDB, "bob", "admin", auth.HashAPIKey(apiKey), nil); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	post, err := CreatePost(ctx, srcDB, "bob", strPtr("md"), "body md", []string{"docs"}, nil, nil)
+	post, err := CreatePost(ctx, srcDB, "bob", strPtr("md"), "body md", []string{"docs"}, nil, "general")
 	if err != nil {
 		t.Fatalf("create post: %v", err)
 	}

@@ -13,6 +13,7 @@ type SearchParams struct {
 	Query       string
 	Author      string
 	Tag         string
+	Board       string
 	Since       *time.Time
 	ThreadsOnly bool
 	Limit       int
@@ -30,6 +31,10 @@ func searchWhereClause(params SearchParams) (string, []any) {
 	if strings.TrimSpace(params.Tag) != "" {
 		whereClause += " AND EXISTS (SELECT 1 FROM tags t WHERE t.content_id = c.id AND t.tag = ?)"
 		args = append(args, strings.TrimSpace(params.Tag))
+	}
+	if strings.TrimSpace(params.Board) != "" {
+		whereClause += " AND c.board_id = ?"
+		args = append(args, strings.TrimSpace(params.Board))
 	}
 	if params.Since != nil {
 		whereClause += " AND c.created >= ?"
@@ -67,7 +72,7 @@ func SearchContent(ctx context.Context, database *sql.DB, params SearchParams) (
 
 	whereClause, args := searchWhereClause(params)
 	query := `
-SELECT c.id, c.type, COALESCE(c.title, ''), c.author, c.thread_id, c.created,
+SELECT c.id, c.type, COALESCE(c.title, ''), c.author, c.thread_id, COALESCE(c.board_id, ''), c.created,
        snippet(content_fts, 2, '>>>', '<<<', '...', 20) AS snippet
 FROM content_fts
 JOIN content c ON c.rowid = content_fts.rowid` + whereClause +
@@ -83,7 +88,7 @@ JOIN content c ON c.rowid = content_fts.rowid` + whereClause +
 	out := make([]models.SearchResult, 0)
 	for rows.Next() {
 		var r models.SearchResult
-		if err := rows.Scan(&r.ID, &r.Type, &r.Title, &r.Author, &r.ThreadID, &r.Created, &r.Snippet); err != nil {
+		if err := rows.Scan(&r.ID, &r.Type, &r.Title, &r.Author, &r.ThreadID, &r.BoardID, &r.Created, &r.Snippet); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
