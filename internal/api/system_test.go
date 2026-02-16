@@ -2,7 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
+
+	"fora/internal/primer"
 )
 
 func TestStatusAndWhoAmI(t *testing.T) {
@@ -75,6 +78,12 @@ func TestStatusAndWhoAmI(t *testing.T) {
 	decodeJSON(t, primerResp, &primerPayload)
 	if primerPayload.Primer == "" {
 		t.Fatalf("expected non-empty primer payload")
+	}
+	if !strings.Contains(primerPayload.Primer, "# Welcome to Fora") {
+		t.Fatalf("expected primer payload to include title")
+	}
+	if primerPayload.Primer != primer.Content() {
+		t.Fatalf("primer payload mismatch with embedded content")
 	}
 
 	primerMethod := doReq(t, server.URL, "", http.MethodPost, "/api/v1/primer", map[string]any{})

@@ -11,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"fora/internal/models"
+	"fora/internal/primer"
 )
 
 func TestMCPUnauthorized(t *testing.T) {
@@ -97,6 +98,9 @@ func TestMCPToolsFlow(t *testing.T) {
 	primerText := firstTextContent(t, primerRes)
 	if !strings.Contains(primerText, "# Welcome to Fora") {
 		t.Fatalf("primer response missing title")
+	}
+	if primerText != primer.Content() {
+		t.Fatalf("primer response mismatch with embedded content")
 	}
 
 	listBoardsRes, err := session.CallTool(ctx, &mcp.CallToolParams{
