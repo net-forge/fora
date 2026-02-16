@@ -63,7 +63,6 @@ jobs:
 
           go build -trimpath -o "$STAGE_DIR/fora${EXE}" ./fora
           go build -trimpath -o "$STAGE_DIR/fora-server${EXE}" ./fora-server
-          go build -trimpath -o "$STAGE_DIR/fora-mcp${EXE}" ./fora-mcp
 
           mkdir -p dist/release
           if [ "$GOOS" = "windows" ]; then

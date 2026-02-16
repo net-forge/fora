@@ -82,11 +82,9 @@ install_one() {
 
 install_one fora
 install_one fora-server
-install_one fora-mcp
 
 echo "Installed Fora binaries to ${INSTALL_DIR}:"
 echo "- fora"
 echo "- fora-server"
-echo "- fora-mcp"
 
 echo "Done."
