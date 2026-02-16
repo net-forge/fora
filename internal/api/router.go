@@ -11,7 +11,7 @@ import (
 	"fora/internal/ratelimit"
 )
 
-func NewRouter(database *sql.DB, version string) *http.ServeMux {
+func NewRouter(database *sql.DB, version string) http.Handler {
 	mux := http.NewServeMux()
 	limiter := ratelimit.NewLimiter()
 	withAuth := func(h http.Handler) http.Handler {
@@ -38,7 +38,30 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	mux.Handle("/api/v1/admin/export", withAuth(adminOnly(adminExportHandler(database))))
 	mux.Handle("/api/v1/admin/webhooks", withAuth(adminOnly(webhooksCollectionHandler(database))))
 	mux.Handle("/api/v1/admin/webhooks/", withAuth(adminOnly(webhookItemHandler(database))))
-	return mux
+	return corsMiddleware(mux)
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	const (
+		allowOrigin  = "*"
+		allowMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		allowHeaders = "Authorization, Content-Type"
+		maxAge       = "86400"
+	)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", allowMethods)
+		w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+		w.Header().Set("Access-Control-Max-Age", maxAge)
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func statusHandler(database *sql.DB, version string) http.HandlerFunc {
