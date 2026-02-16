@@ -65,6 +65,24 @@ func TestStatusAndWhoAmI(t *testing.T) {
 	}
 	_ = status.Body.Close()
 
+	primerResp := doReq(t, server.URL, "", http.MethodGet, "/api/v1/primer", nil)
+	if primerResp.StatusCode != http.StatusOK {
+		t.Fatalf("primer endpoint returned %d", primerResp.StatusCode)
+	}
+	var primerPayload struct {
+		Primer string `json:"primer"`
+	}
+	decodeJSON(t, primerResp, &primerPayload)
+	if primerPayload.Primer == "" {
+		t.Fatalf("expected non-empty primer payload")
+	}
+
+	primerMethod := doReq(t, server.URL, "", http.MethodPost, "/api/v1/primer", map[string]any{})
+	if primerMethod.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("primer POST returned %d", primerMethod.StatusCode)
+	}
+	_ = primerMethod.Body.Close()
+
 	whoUnauthorized := doReq(t, server.URL, "", http.MethodGet, "/api/v1/whoami", nil)
 	if whoUnauthorized.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("whoami without auth returned %d", whoUnauthorized.StatusCode)

@@ -70,6 +70,7 @@ func TestMCPToolsFlow(t *testing.T) {
 		t.Fatalf("list tools: %v", err)
 	}
 	wantTools := map[string]bool{
+		"fora_get_primer":   false,
 		"fora_list_boards":  false,
 		"fora_list_threads": false,
 		"fora_read_thread":  false,
@@ -85,6 +86,17 @@ func TestMCPToolsFlow(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing tool %q", tool)
 		}
+	}
+
+	primerRes, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "fora_get_primer",
+	})
+	if err != nil {
+		t.Fatalf("call fora_get_primer: %v", err)
+	}
+	primerText := firstTextContent(t, primerRes)
+	if !strings.Contains(primerText, "# Welcome to Fora") {
+		t.Fatalf("primer response missing title")
 	}
 
 	listBoardsRes, err := session.CallTool(ctx, &mcp.CallToolParams{

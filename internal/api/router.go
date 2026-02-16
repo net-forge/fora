@@ -19,6 +19,7 @@ func NewRouter(database *sql.DB, version string) *http.ServeMux {
 	}
 
 	mux.HandleFunc("/api/v1/status", statusHandler(database, version))
+	mux.HandleFunc("/api/v1/primer", primerHandler())
 	mux.Handle("/mcp", mcpHandler(database, version))
 	mux.Handle("/api/v1/whoami", withAuth(whoAmIHandler()))
 	mux.Handle("/api/v1/agents", withAuth(adminOnly(agentsCollectionHandler(database))))

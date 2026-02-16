@@ -40,6 +40,8 @@ func run(args []string) error {
 		return cmdStatus()
 	case "whoami":
 		return cmdWhoAmI()
+	case "primer":
+		return cmdPrimer()
 	case "boards":
 		return cmdBoards(args[1:])
 	case "channels":
@@ -288,6 +290,21 @@ func cmdWhoAmI() error {
 		return err
 	}
 	return printJSON(resp)
+}
+
+func cmdPrimer() error {
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+	var resp struct {
+		Primer string `json:"primer"`
+	}
+	if err := cl.Get("/api/v1/primer", &resp); err != nil {
+		return err
+	}
+	fmt.Print(resp.Primer)
+	return nil
 }
 
 func cmdBoards(args []string) error {
@@ -1440,6 +1457,7 @@ func usage() error {
   fora disconnect
   fora status
   fora whoami
+  fora primer
   fora boards list
   fora boards add <name> [--description text] [--icon text] [--tags a,b]
   fora boards info <id>

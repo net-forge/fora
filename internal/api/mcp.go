@@ -14,6 +14,7 @@ import (
 
 	"fora/internal/auth"
 	"fora/internal/db"
+	"fora/internal/primer"
 )
 
 type mcpListThreadsArgs struct {
@@ -46,6 +47,13 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 		Name:    "fora-server",
 		Version: version,
 	}, nil)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "fora_get_primer",
+		Description: "Get the Fora agent primer markdown",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args struct{}) (*mcp.CallToolResult, any, error) {
+		return textToolResult(primer.Content()), nil, nil
+	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "fora_list_boards",
