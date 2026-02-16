@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -22,6 +24,8 @@ type Server struct {
 	Agent       string `json:"agent,omitempty"`
 	ConnectedAt string `json:"connected_at"`
 }
+
+var envPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 func Path() (string, error) {
 	if cwd, err := os.Getwd(); err == nil {
@@ -96,6 +100,9 @@ func Load() (*Config, error) {
 	if c.Version == 0 {
 		c.Version = 1
 	}
+	if err := resolveConfigEnv(&c); err != nil {
+		return nil, err
+	}
 	return &c, nil
 }
 
@@ -133,4 +140,39 @@ func (c *Config) ClearDefault() {
 func (c *Config) Default() (Server, bool) {
 	s, ok := c.Servers[c.DefaultServer]
 	return s, ok
+}
+
+func resolveConfigEnv(c *Config) error {
+	c.DefaultServer = resolveEnvPlaceholders(c.DefaultServer)
+	for key, srv := range c.Servers {
+		resolvedKey := resolveEnvPlaceholders(key)
+		srv.URL = resolveEnvPlaceholders(srv.URL)
+		srv.APIKey = resolveEnvPlaceholders(srv.APIKey)
+		srv.Agent = resolveEnvPlaceholders(srv.Agent)
+		srv.ConnectedAt = resolveEnvPlaceholders(srv.ConnectedAt)
+		if resolvedKey != key {
+			delete(c.Servers, key)
+		}
+		c.Servers[resolvedKey] = srv
+	}
+	for k, v := range c.Preferences {
+		c.Preferences[k] = resolveEnvPlaceholders(v)
+	}
+	return nil
+}
+
+func resolveEnvPlaceholders(raw string) string {
+	if !strings.Contains(raw, "${") {
+		return raw
+	}
+	return envPattern.ReplaceAllStringFunc(raw, func(token string) string {
+		matches := envPattern.FindStringSubmatch(token)
+		if len(matches) != 2 {
+			return token
+		}
+		if val, ok := os.LookupEnv(matches[1]); ok {
+			return val
+		}
+		return ""
+	})
 }

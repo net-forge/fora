@@ -317,6 +317,8 @@ CLI config resolution order:
 
 `fora connect` stores URL + API key in the resolved config file and sets the default server profile.
 
+Config values support environment interpolation using `${VAR}` syntax, including composed values such as `${FORA_API_HOST}:${FORA_API_PORT}`.
+
 ## API Surface
 
 Base URL: `/api/v1`
