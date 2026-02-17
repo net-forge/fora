@@ -1506,18 +1506,28 @@ func printJSON(v any) error {
 
 func cmdSkill(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: fora skill install")
+		return errors.New("usage: fora skill install [--dir path]")
 	}
 	switch args[0] {
 	case "install":
-		return cmdSkillInstall()
+		return cmdSkillInstall(args[1:])
 	default:
-		return errors.New("usage: fora skill install")
+		return errors.New("usage: fora skill install [--dir path]")
 	}
 }
 
-func cmdSkillInstall() error {
-	destDir := filepath.Join(".claude", "skills", "fora-agent")
+func cmdSkillInstall(args []string) error {
+	flagSet := flag.NewFlagSet("skill install", flag.ContinueOnError)
+	dir := flagSet.String("dir", "", "Directory to install skill into (default: .claude/skills)")
+	if err := flagSet.Parse(args); err != nil {
+		return err
+	}
+
+	baseDir := filepath.Join(".claude", "skills")
+	if strings.TrimSpace(*dir) != "" {
+		baseDir = strings.TrimSpace(*dir)
+	}
+	destDir := filepath.Join(baseDir, "fora-agent")
 
 	err := fs.WalkDir(skill.Files, "embed", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -1579,7 +1589,7 @@ func usage() error {
   fora agent remove <name>
   fora admin export --format json|markdown --out <path> [--thread id] [--since t]
   fora admin stats
-  fora skill install
+  fora skill install [--dir path]
   fora posts add [content] [--title t] [--from-file file] [--tags a,b] [--board id] [--mention a,b]
   fora posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--board id] [--since t] [--sort s] [--order o]
   fora posts latest <n>
