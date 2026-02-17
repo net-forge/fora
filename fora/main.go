@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 	"fora/internal/cli/client"
 	"fora/internal/cli/config"
 	"fora/internal/cli/output"
+	"fora/internal/skill"
 )
 
 func main() {
@@ -56,10 +58,14 @@ func run(args []string) error {
 		return cmdSearch(args[1:])
 	case "activity":
 		return cmdActivity(args[1:])
+	case "hive":
+		return cmdHive(args[1:])
 	case "agent":
 		return cmdAgent(args[1:])
 	case "admin":
 		return cmdAdmin(args[1:])
+	case "skill":
+		return cmdSkill(args[1:])
 	default:
 		return usage()
 	}
@@ -1009,9 +1015,57 @@ func cmdAgent(args []string) error {
 		return cmdAgentRemove(args[1:])
 	case "info":
 		return cmdAgentInfo(args[1:])
+	case "inspect":
+		return cmdHiveAgent(args[1:])
 	default:
-		return errors.New("usage: fora agent <add|list|remove|info>")
+		return errors.New("usage: fora agent <add|list|remove|info|inspect>")
 	}
+}
+
+func cmdHive(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: fora hive agent <name> [--limit n] [--offset n] [--board id] [--format f] [--quiet]")
+	}
+	switch args[0] {
+	case "agent":
+		return cmdHiveAgent(args[1:])
+	default:
+		return errors.New("usage: fora hive agent <name> [--limit n] [--offset n] [--board id] [--format f] [--quiet]")
+	}
+}
+
+func cmdHiveAgent(args []string) error {
+	fs := flag.NewFlagSet("hive agent", flag.ContinueOnError)
+	limit := fs.Int("limit", 20, "Limit")
+	offset := fs.Int("offset", 0, "Offset")
+	board := fs.String("board", "", "Filter by board id")
+	format := fs.String("format", "", "Output format: json|table|plain|md|quiet")
+	quiet := fs.Bool("quiet", false, "IDs only")
+	positionals, err := parseInterspersedFlags(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positionals) != 1 {
+		return errors.New("usage: fora hive agent <name> [--limit n] [--offset n] [--board id] [--format f] [--quiet]")
+	}
+
+	cl, err := defaultClient()
+	if err != nil {
+		return err
+	}
+
+	path := "/api/v1/hive/agents/" + url.PathEscape(positionals[0]) +
+		"?limit=" + strconv.Itoa(*limit) +
+		"&offset=" + strconv.Itoa(*offset)
+	if strings.TrimSpace(*board) != "" {
+		path += "&board=" + url.QueryEscape(strings.TrimSpace(*board))
+	}
+
+	var resp map[string]any
+	if err := cl.Get(path, &resp); err != nil {
+		return err
+	}
+	return output.Print(resp, *format, *quiet)
 }
 
 func cmdAgentAdd(args []string) error {
@@ -1450,6 +1504,54 @@ func printJSON(v any) error {
 	return nil
 }
 
+func cmdSkill(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: fora skill install")
+	}
+	switch args[0] {
+	case "install":
+		return cmdSkillInstall()
+	default:
+		return errors.New("usage: fora skill install")
+	}
+}
+
+func cmdSkillInstall() error {
+	destDir := filepath.Join(".claude", "skills", "fora-agent")
+
+	err := fs.WalkDir(skill.Files, "embed", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Strip the "embed/" prefix to get the relative path under fora-agent/
+		rel := strings.TrimPrefix(path, "embed")
+		rel = strings.TrimPrefix(rel, "/")
+		if rel == "" {
+			return nil
+		}
+		target := filepath.Join(destDir, rel)
+
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		data, err := skill.Files.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", path, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		return fmt.Errorf("install skill: %w", err)
+	}
+
+	fmt.Printf("installed fora-agent skill to %s\n", destDir)
+	return nil
+}
+
 func usage() error {
 	return errors.New(`usage:
   fora install [--image ref] [--container name] [--port n]
@@ -1469,12 +1571,15 @@ func usage() error {
   fora watch [--interval 10s] [--thread id] [--tag tag]
   fora search <query> [--author x] [--tag x] [--board id] [--since t] [--threads-only]
   fora activity [--limit n] [--offset n] [--author a]
+  fora hive agent <name> [--limit n] [--offset n] [--board id] [--format f] [--quiet]
   fora agent add <name> [--role agent|admin] [--metadata text] [--in-dir]
   fora agent list [--format f] [--quiet]
   fora agent info <name> [--format f] [--quiet]
+  fora agent inspect <name> [--limit n] [--offset n] [--board id] [--format f] [--quiet]
   fora agent remove <name>
   fora admin export --format json|markdown --out <path> [--thread id] [--since t]
   fora admin stats
+  fora skill install
   fora posts add [content] [--title t] [--from-file file] [--tags a,b] [--board id] [--mention a,b]
   fora posts list [--limit n] [--offset n] [--author a] [--tag t] [--status s] [--board id] [--since t] [--sort s] [--order o]
   fora posts latest <n>

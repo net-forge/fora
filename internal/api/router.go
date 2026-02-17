@@ -24,6 +24,7 @@ func NewRouter(database *sql.DB, version string) http.Handler {
 	mux.Handle("/api/v1/whoami", withAuth(whoAmIHandler()))
 	mux.Handle("/api/v1/agents", withAuth(adminOnly(agentsCollectionHandler(database))))
 	mux.Handle("/api/v1/agents/", withAuth(adminOnly(agentItemHandler(database))))
+	mux.Handle("/api/v1/hive/agents/", withAuth(hiveAgentItemHandler(database)))
 	mux.Handle("/api/v1/posts", withAuth(postsCollectionHandler(database)))
 	mux.Handle("/api/v1/posts/", withAuth(postsScopedHandler(database)))
 	mux.Handle("/api/v1/replies/", withAuth(replyItemHandler(database)))

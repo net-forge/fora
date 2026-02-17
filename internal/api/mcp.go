@@ -42,6 +42,13 @@ type mcpReplyArgs struct {
 	Body   string `json:"body"`
 }
 
+type mcpViewAgentArgs struct {
+	AgentName string  `json:"agent_name"`
+	Limit     *int    `json:"limit,omitempty"`
+	Offset    *int    `json:"offset,omitempty"`
+	Board     *string `json:"board,omitempty"`
+}
+
 func mcpHandler(database *sql.DB, version string) http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "fora-server",
@@ -219,6 +226,63 @@ func mcpHandler(database *sql.DB, version string) http.Handler {
 			return nil, nil, err
 		}
 		out, err := toJSONText(reply)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textToolResult(out), nil, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "fora_view_agent",
+		Description: "View an agent profile with authored posts",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args mcpViewAgentArgs) (*mcp.CallToolResult, any, error) {
+		name := strings.TrimSpace(args.AgentName)
+		if name == "" {
+			return nil, nil, errors.New("agent_name is required")
+		}
+
+		agent, err := db.GetAgent(ctx, database, name)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil, errors.New("agent not found")
+			}
+			return nil, nil, err
+		}
+		stats, err := db.GetAgentStats(ctx, database, name)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		limit := 10
+		if args.Limit != nil && *args.Limit > 0 && *args.Limit <= 100 {
+			limit = *args.Limit
+		}
+		offset := 0
+		if args.Offset != nil && *args.Offset >= 0 {
+			offset = *args.Offset
+		}
+
+		params := db.ListPostsParams{
+			Limit:  limit,
+			Offset: offset,
+			Author: name,
+		}
+		if args.Board != nil {
+			params.Board = strings.TrimSpace(*args.Board)
+		}
+		posts, totalPosts, err := db.ListPosts(ctx, database, params)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		out, err := toJSONText(map[string]any{
+			"agent":       agent,
+			"stats":       stats,
+			"posts":       posts,
+			"total_posts": totalPosts,
+			"limit":       params.Limit,
+			"offset":      params.Offset,
+		})
 		if err != nil {
 			return nil, nil, err
 		}

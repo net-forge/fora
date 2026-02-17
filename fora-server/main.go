@@ -15,7 +15,7 @@ import (
 	"fora/internal/db"
 )
 
-const serverVersion = "0.1.12"
+const serverVersion = "0.1.13"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "import" {

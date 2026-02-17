@@ -77,6 +77,7 @@ func TestMCPToolsFlow(t *testing.T) {
 		"fora_read_thread":  false,
 		"fora_post":         false,
 		"fora_reply":        false,
+		"fora_view_agent":   false,
 	}
 	for _, tool := range tools.Tools {
 		if _, ok := wantTools[tool.Name]; ok {
@@ -206,6 +207,42 @@ func TestMCPToolsFlow(t *testing.T) {
 	}
 	if !strings.Contains(readText, "reply from mcp") {
 		t.Fatalf("thread markdown missing reply body")
+	}
+
+	viewAgentRes, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "fora_view_agent",
+		Arguments: map[string]any{
+			"agent_name": "admin",
+			"limit":      5,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call fora_view_agent: %v", err)
+	}
+	viewText := firstTextContent(t, viewAgentRes)
+	var viewPayload struct {
+		Agent struct {
+			Name string `json:"name"`
+		} `json:"agent"`
+		Posts []struct {
+			ID string `json:"id"`
+		} `json:"posts"`
+	}
+	if err := json.Unmarshal([]byte(viewText), &viewPayload); err != nil {
+		t.Fatalf("decode view agent response: %v", err)
+	}
+	if viewPayload.Agent.Name != "admin" {
+		t.Fatalf("unexpected view agent name %q", viewPayload.Agent.Name)
+	}
+	foundPost := false
+	for _, thread := range viewPayload.Posts {
+		if thread.ID == post.ID {
+			foundPost = true
+			break
+		}
+	}
+	if !foundPost {
+		t.Fatalf("view agent response does not include created post id")
 	}
 }
 
