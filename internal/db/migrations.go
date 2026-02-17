@@ -42,6 +42,11 @@ var migrations = []migration{
 		name:    "system_settings",
 		sql:     systemSettingsSchemaV6,
 	},
+	{
+		version: 7,
+		name:    "fix_archived_status",
+		sql:     fixArchivedStatusSchemaV7,
+	},
 }
 
 func ApplyMigrations(database *sql.DB) error {

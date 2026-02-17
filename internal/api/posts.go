@@ -743,7 +743,7 @@ func parseListPostsParams(r *http.Request) (db.ListPostsParams, error) {
 	}
 	if params.Status != "" {
 		switch params.Status {
-		case "open", "closed", "pinned", "arcforad":
+		case "open", "closed", "pinned", "archived":
 		default:
 			return db.ListPostsParams{}, errors.New("invalid status filter")
 		}

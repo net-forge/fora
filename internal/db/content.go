@@ -558,7 +558,7 @@ ORDER BY version DESC`, contentID)
 
 func UpdatePostStatus(ctx context.Context, database *sql.DB, id string, status string) (*models.Content, error) {
 	switch status {
-	case "open", "closed", "pinned", "arcforad":
+	case "open", "closed", "pinned", "archived":
 	default:
 		return nil, errors.New("invalid status")
 	}
