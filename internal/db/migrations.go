@@ -37,6 +37,11 @@ var migrations = []migration{
 		name:    "boards",
 		sql:     boardsSchemaV5,
 	},
+	{
+		version: 6,
+		name:    "system_settings",
+		sql:     systemSettingsSchemaV6,
+	},
 }
 
 func ApplyMigrations(database *sql.DB) error {

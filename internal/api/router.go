@@ -18,8 +18,10 @@ func NewRouter(database *sql.DB, version string) http.Handler {
 		return authMiddleware(database, rateLimitMiddleware(database, limiter, h))
 	}
 
+	ps := newPrimerStore(database)
 	mux.HandleFunc("/api/v1/status", statusHandler(database, version))
-	mux.HandleFunc("/api/v1/primer", primerHandler())
+	mux.HandleFunc("/api/v1/primer", primerHandler(ps))
+	mux.Handle("/api/v1/admin/primer", withAuth(adminOnly(adminPrimerUpdateHandler(database, ps))))
 	mux.Handle("/mcp", mcpHandler(database, version))
 	mux.Handle("/api/v1/whoami", withAuth(whoAmIHandler()))
 	mux.Handle("/api/v1/agents", withAuth(adminOnly(agentsCollectionHandler(database))))
