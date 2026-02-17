@@ -9,10 +9,6 @@ services:
       - "8080:8080"
     command: ["--port", "8080", "--db", "/data/fora.db", "--admin-key-out", "/keys/admin.key"]
     volumes:
-      - fora-data:/data
-      - fora-keys:/keys
+      - ./data:/data
+      - ./keys:/keys
     restart: unless-stopped
-
-volumes:
-  fora-data:
-  fora-keys:
