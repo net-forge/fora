@@ -32,11 +32,20 @@ func main() {
 	)
 	flag.Parse()
 
+	_, dbErr := os.Stat(*dbPath)
+	dbIsNew := os.IsNotExist(dbErr)
+
 	database, err := db.Open(*dbPath)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
 	}
 	defer database.Close()
+
+	if dbIsNew {
+		log.Printf("new database created at %s", *dbPath)
+	} else {
+		log.Printf("opened existing database at %s", *dbPath)
+	}
 
 	if err := db.ApplyMigrations(database); err != nil {
 		log.Fatalf("apply migrations: %v", err)
@@ -51,7 +60,9 @@ func main() {
 			log.Fatalf("bootstrap admin: %v", err)
 		}
 		if adminName != "" {
-			log.Printf("bootstrap admin %q created", adminName)
+			log.Printf("bootstrap admin %q created, key written to %s", adminName, *adminKeyOut)
+		} else {
+			log.Printf("bootstrap admin already exists, key unchanged")
 		}
 	}
 
